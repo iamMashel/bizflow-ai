@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Initial repository documentation is complete. The FastAPI backend foundation has been started under `apps/api`.
+Initial repository documentation is complete. Backend and frontend foundations have been started under `apps/api` and `apps/web`.
 
 ## Completed
 
@@ -21,10 +21,15 @@ Initial repository documentation is complete. The FastAPI backend foundation has
 - Added a real `/health` endpoint.
 - Added a Pytest test for `/health`.
 - Added Ruff, Mypy, and Pytest configuration for the API app.
+- Initialized the frontend with Next.js App Router, TypeScript, and Tailwind.
+- Added a clean landing page and login placeholder.
+- Added a protected dashboard layout placeholder with shared navigation.
+- Added placeholder pages for documents, chat, workflows, and settings.
+- Added frontend loading, empty, and error component patterns.
+- Added frontend API and Supabase client placeholders.
 
 ## Not Started
 
-- Frontend application
 - Supabase migrations
 - RAG ingestion implementation
 - Model router implementation
@@ -35,8 +40,8 @@ Initial repository documentation is complete. The FastAPI backend foundation has
 
 ## Next Recommended Milestones
 
-1. Add backend CI for Ruff, Mypy, and Pytest.
-2. Scaffold frontend with Next.js, TypeScript, and Tailwind.
+1. Add CI for backend and frontend checks.
+2. Replace frontend placeholders with auth-connected flows once Supabase is introduced.
 3. Add Supabase migration baseline with RLS policies.
 4. Implement auth-aware backend dependencies.
 5. Build document upload and ingestion as the first vertical slice.
