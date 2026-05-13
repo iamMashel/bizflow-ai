@@ -27,24 +27,23 @@ Initial repository documentation is complete. Backend and frontend foundations h
 - Added placeholder pages for documents, chat, workflows, and settings.
 - Added frontend loading, empty, and error component patterns.
 - Added frontend API and Supabase client placeholders.
+- Added backend service skeletons for model routing, n8n workflows, and documents.
+- Added typed document schemas and a placeholder `GET /documents` route.
 
 ## Not Started
 
-- Supabase migrations
 - RAG ingestion implementation
 - Model router implementation
 - n8n service implementation
 - Langfuse instrumentation
-- Automated tests
-- CI
 
 ## Next Recommended Milestones
 
-1. Add CI for backend and frontend checks.
+1. Implement auth-aware backend dependencies.
 2. Replace frontend placeholders with auth-connected flows once Supabase is introduced.
-3. Add Supabase migration baseline with RLS policies.
-4. Implement auth-aware backend dependencies.
-5. Build document upload and ingestion as the first vertical slice.
+3. Build document listing against Supabase with RLS-backed ownership.
+4. Build document upload and ingestion as the first vertical slice.
+5. Add Langfuse instrumentation around future model and RAG calls.
 
 ## Rules To Preserve
 
