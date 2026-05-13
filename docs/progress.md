@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Initial repository documentation has been created. No application code has been written.
+Initial repository documentation is complete. The FastAPI backend foundation has been started under `apps/api`.
 
 ## Completed
 
@@ -15,10 +15,15 @@ Initial repository documentation has been created. No application code has been 
 - Documented testing strategy.
 - Added environment variable template.
 - Added git ignore rules.
+- Initialized the backend with uv and Python 3.12.
+- Added a FastAPI application factory in `apps/api/app/main.py`.
+- Added Pydantic Settings in `apps/api/app/core/config.py`.
+- Added a real `/health` endpoint.
+- Added a Pytest test for `/health`.
+- Added Ruff, Mypy, and Pytest configuration for the API app.
 
 ## Not Started
 
-- Backend application
 - Frontend application
 - Supabase migrations
 - RAG ingestion implementation
@@ -30,7 +35,7 @@ Initial repository documentation has been created. No application code has been 
 
 ## Next Recommended Milestones
 
-1. Scaffold backend with FastAPI, Python 3.12, and uv.
+1. Add backend CI for Ruff, Mypy, and Pytest.
 2. Scaffold frontend with Next.js, TypeScript, and Tailwind.
 3. Add Supabase migration baseline with RLS policies.
 4. Implement auth-aware backend dependencies.
