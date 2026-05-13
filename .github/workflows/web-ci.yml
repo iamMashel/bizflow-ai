@@ -1,14 +1,14 @@
-name: API CI
+name: Web CI
 
 on:
   pull_request:
     paths:
-      - "apps/api/**"
-      - ".github/workflows/api-ci.yml"
+      - "apps/web/**"
+      - ".github/workflows/web-ci.yml"
   push:
     branches: [main]
     paths:
-      - "apps/api/**"
+      - "apps/web/**"
 
 jobs:
   test:
@@ -16,30 +16,17 @@ jobs:
 
     defaults:
       run:
-        working-directory: apps/api
+        working-directory: apps/web
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
         with:
-          enable-cache: true
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
 
-      - name: Install Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --locked
-
-      - name: Lint
-        run: uv run ruff check .
-
-      - name: Format check
-        run: uv run ruff format --check .
-
-      - name: Type check
-        run: uv run mypy app
-
-      - name: Test
-        run: uv run pytest
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
