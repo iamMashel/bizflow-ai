@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { LogoutButton } from "@/src/components/logout-button";
+
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/documents", label: "Documents" },
@@ -51,6 +53,7 @@ export function AppSidebar() {
           );
         })}
       </nav>
+      <LogoutButton />
     </aside>
   );
 }

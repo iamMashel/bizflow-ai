@@ -29,6 +29,9 @@ Initial repository documentation is complete. Backend and frontend foundations h
 - Added frontend API and Supabase client placeholders.
 - Added backend service skeletons for model routing, n8n workflows, and documents.
 - Added typed document schemas and a placeholder `GET /documents` route.
+- Added Supabase auth foundation with backend Bearer token verification and `/me`.
+- Protected `GET /documents` behind the auth dependency while keeping its response empty.
+- Added frontend Supabase client setup, email/password login, logout, dashboard auth gate, and API token attachment.
 
 ## Not Started
 
@@ -39,11 +42,11 @@ Initial repository documentation is complete. Backend and frontend foundations h
 
 ## Next Recommended Milestones
 
-1. Implement auth-aware backend dependencies.
-2. Replace frontend placeholders with auth-connected flows once Supabase is introduced.
-3. Build document listing against Supabase with RLS-backed ownership.
-4. Build document upload and ingestion as the first vertical slice.
-5. Add Langfuse instrumentation around future model and RAG calls.
+1. Build document listing against Supabase with RLS-backed ownership.
+2. Build document upload and ingestion as the first vertical slice.
+3. Add Langfuse instrumentation around future model and RAG calls.
+4. Implement `model_router.py` through LiteLLM.
+5. Implement approved workflow triggers through `n8n_service.py`.
 
 ## Rules To Preserve
 
