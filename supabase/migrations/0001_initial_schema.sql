@@ -1,5 +1,5 @@
 -- 0001_initial_schema.sql
--- BizFlow AI initial database schema
+-- BizFlow AI initial database schema.
 -- Safe to rerun during early development.
 
 -- ------------------------------------------------------------
@@ -29,7 +29,10 @@ create table if not exists public.documents (
   unique(user_id, file_hash)
 );
 
-create table if not exists public.document_chunks (
+-- Early development reset: Gemini embeddings are 3072-dimensional.
+drop table if exists public.document_chunks cascade;
+
+create table public.document_chunks (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references public.documents(id) on delete cascade,
   user_id uuid not null,
@@ -37,7 +40,7 @@ create table if not exists public.document_chunks (
   content text not null,
   token_count int,
   metadata jsonb not null default '{}',
-  embedding extensions.vector(1536),
+  embedding extensions.vector(3072),
   created_at timestamptz not null default now()
 );
 

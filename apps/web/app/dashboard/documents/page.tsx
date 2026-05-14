@@ -5,7 +5,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/src/components/state-patterns";
 import { apiClient } from "@/src/lib/api-client";
 
-type DocumentStatus = "pending" | "ingesting" | "ready" | "failed";
+type DocumentStatus = "pending" | "ingesting" | "processing" | "ready" | "completed" | "failed";
 
 type DocumentSummary = {
   id: string;
@@ -16,6 +16,12 @@ type DocumentSummary = {
 
 type DocumentUploadResponse = DocumentSummary & {
   duplicate: boolean;
+};
+
+type DocumentIngestResponse = {
+  id: string;
+  status: DocumentStatus;
+  chunks_created: number;
 };
 
 const acceptedFileTypes = ".pdf,.docx,.txt,.md,.csv";
@@ -30,14 +36,20 @@ function formatDate(value: string) {
 function statusClasses(status: DocumentStatus) {
   switch (status) {
     case "ready":
+    case "completed":
       return "bg-emerald-50 text-emerald-700 ring-emerald-200";
     case "failed":
       return "bg-red-50 text-red-700 ring-red-200";
     case "ingesting":
+    case "processing":
       return "bg-blue-50 text-blue-700 ring-blue-200";
     case "pending":
       return "bg-amber-50 text-amber-700 ring-amber-200";
   }
+}
+
+function canIngest(status: DocumentStatus) {
+  return status === "pending" || status === "failed";
 }
 
 export default function DocumentsPage() {
@@ -45,6 +57,7 @@ export default function DocumentsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -128,6 +141,27 @@ export default function DocumentsPage() {
     }
   }
 
+  async function handleIngest(document: DocumentSummary) {
+    setIngestingDocumentId(document.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await apiClient.request<DocumentIngestResponse>(
+        `/documents/${document.id}/ingest`,
+        {
+          method: "POST",
+        },
+      );
+      setSuccessMessage(`${document.filename} ingested into ${result.chunks_created} chunk(s).`);
+      await loadDocuments();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to ingest document.");
+    } finally {
+      setIngestingDocumentId(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -197,26 +231,47 @@ export default function DocumentsPage() {
                 <th className="px-4 py-3 text-left font-semibold text-slate-700">Filename</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-700">Status</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-700">Created</th>
+                <th className="px-4 py-3 text-right font-semibold text-slate-700">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {documents.map((document) => (
-                <tr key={document.id}>
-                  <td className="max-w-xs truncate px-4 py-3 font-medium text-slate-950">
-                    {document.filename}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusClasses(
-                        document.status,
-                      )}`}
-                    >
-                      {document.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(document.created_at)}</td>
-                </tr>
-              ))}
+              {documents.map((document) => {
+                const isIngesting = ingestingDocumentId === document.id;
+
+                return (
+                  <tr key={document.id}>
+                    <td className="max-w-xs truncate px-4 py-3 font-medium text-slate-950">
+                      {document.filename}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusClasses(
+                          document.status,
+                        )}`}
+                      >
+                        {isIngesting ? "processing" : document.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatDate(document.created_at)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {canIngest(document.status) ? (
+                        <button
+                          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isIngesting || ingestingDocumentId !== null}
+                          onClick={() => void handleIngest(document)}
+                          type="button"
+                        >
+                          {isIngesting ? "Ingesting" : "Ingest"}
+                        </button>
+                      ) : (
+                        <span className="text-sm text-slate-400">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

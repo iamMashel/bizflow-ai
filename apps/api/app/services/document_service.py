@@ -270,7 +270,7 @@ class DocumentService:
             raise DocumentServiceError("Document row is missing id.")
         if not isinstance(filename, str):
             raise DocumentServiceError("Document row is missing filename.")
-        if status not in {"pending", "ingesting", "ready", "failed"}:
+        if status not in {"pending", "ingesting", "processing", "ready", "completed", "failed"}:
             raise DocumentServiceError("Document row has invalid status.")
         if not isinstance(created_at, str):
             raise DocumentServiceError("Document row is missing created_at.")

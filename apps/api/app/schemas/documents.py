@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-DocumentStatus = Literal["pending", "ingesting", "ready", "failed"]
+DocumentStatus = Literal["pending", "ingesting", "processing", "ready", "completed", "failed"]
 
 
 class DocumentSummary(BaseModel):
@@ -18,3 +18,9 @@ class DocumentSummary(BaseModel):
 
 class DocumentUploadResponse(DocumentSummary):
     duplicate: bool
+
+
+class DocumentIngestResponse(BaseModel):
+    id: UUID
+    status: DocumentStatus
+    chunks_created: int

@@ -1,11 +1,13 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.core.config import Settings, get_settings
 from app.core.security import CurrentUser, get_current_user
-from app.schemas.documents import DocumentSummary, DocumentUploadResponse
+from app.schemas.documents import DocumentIngestResponse, DocumentSummary, DocumentUploadResponse
 from app.services.document_service import DocumentService, DocumentServiceError
+from app.services.ingestion_service import IngestionService, IngestionServiceError
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -16,6 +18,12 @@ def get_document_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DocumentService:
     return DocumentService(settings)
+
+
+def get_ingestion_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> IngestionService:
+    return IngestionService(settings)
 
 
 def _file_extension(filename: str) -> str:
@@ -56,6 +64,28 @@ async def list_documents(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
         ) from exc
+
+
+@router.post("/{document_id}/ingest", response_model=DocumentIngestResponse)
+async def ingest_document(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    service: Annotated[IngestionService, Depends(get_ingestion_service)],
+) -> DocumentIngestResponse:
+    try:
+        result = await service.ingest_document(
+            document_id=document_id,
+            user_id=current_user.id,
+            access_token=current_user.access_token,
+        )
+    except IngestionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    return DocumentIngestResponse(
+        id=result.document_id,
+        status="completed",
+        chunks_created=result.chunks_created,
+    )
 
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)

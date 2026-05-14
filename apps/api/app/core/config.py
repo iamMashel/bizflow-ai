@@ -42,6 +42,28 @@ class Settings(BaseSettings):
         default=20 * 1024 * 1024,
         validation_alias=AliasChoices("MAX_UPLOAD_BYTES", "BIZFLOW_MAX_UPLOAD_BYTES"),
     )
+    gemini_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("GEMINI_API_KEY", "BIZFLOW_GEMINI_API_KEY"),
+    )
+    default_embedding_provider: str = Field(
+        default="gemini",
+        validation_alias=AliasChoices(
+            "DEFAULT_EMBEDDING_PROVIDER",
+            "BIZFLOW_DEFAULT_EMBEDDING_PROVIDER",
+        ),
+    )
+    default_embedding_model: str = Field(
+        default="gemini-embedding-001",
+        validation_alias=AliasChoices(
+            "DEFAULT_EMBEDDING_MODEL",
+            "BIZFLOW_DEFAULT_EMBEDDING_MODEL",
+        ),
+    )
+    embedding_dimensions: int = Field(
+        default=3072,
+        validation_alias=AliasChoices("EMBEDDING_DIMENSIONS", "BIZFLOW_EMBEDDING_DIMENSIONS"),
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
