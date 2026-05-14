@@ -67,3 +67,34 @@ Initial repository documentation is complete. Backend and frontend foundations h
 - Every user-owned table has `user_id` and RLS.
 - External workflows require human approval.
 - Uploaded documents are untrusted data.
+
+## Document Upload Milestone
+
+### Completed
+
+- Supabase auth-protected document routes.
+- Private `documents` storage bucket.
+- Document upload from frontend.
+- File validation.
+- SHA-256 duplicate detection.
+- Document metadata inserted into `public.documents`.
+- Authenticated document listing.
+- RLS policies and grants fixed for `authenticated` role.
+
+### Verified
+
+- Unauthenticated `GET /documents` returns 401.
+- Authenticated user can upload `bizflow-test.txt`.
+- Uploaded document appears in dashboard with status `pending`.
+
+### Key lesson
+
+Postgres grants and RLS are separate layers:
+
+- Grants allow a role to access a table.
+- RLS controls which rows the role can access.
+
+### Next
+
+Build RAG ingestion:
+upload -> extract text -> chunk -> embed -> store chunks -> update status.
