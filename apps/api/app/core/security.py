@@ -1,13 +1,8 @@
-import base64
-import binascii
-import hashlib
-import hmac
-import json
-import time
 from dataclasses import dataclass
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 from uuid import UUID
 
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -30,63 +25,62 @@ def _unauthorized(detail: str = "Invalid or missing authentication token.") -> H
     )
 
 
-def _decode_base64_url(value: str) -> bytes:
-    padding = "=" * (-len(value) % 4)
-    try:
-        return base64.urlsafe_b64decode(f"{value}{padding}")
-    except (binascii.Error, ValueError) as exc:
-        raise _unauthorized() from exc
+def _get_string(value: dict[str, Any], key: str) -> str | None:
+    raw_value = value.get(key)
+    return raw_value if isinstance(raw_value, str) else None
 
 
-def _decode_json_segment(value: str) -> dict[str, Any]:
-    try:
-        decoded = json.loads(_decode_base64_url(value))
-    except json.JSONDecodeError as exc:
-        raise _unauthorized() from exc
+class SupabaseAuthVerifier:
+    def __init__(
+        self,
+        supabase_url: str,
+        supabase_anon_key: str,
+        timeout_seconds: float = 10.0,
+    ) -> None:
+        self.supabase_url = supabase_url.rstrip("/")
+        self.supabase_anon_key = supabase_anon_key
+        self.timeout_seconds = timeout_seconds
 
-    if not isinstance(decoded, dict):
-        raise _unauthorized()
+    async def verify_token(self, access_token: str) -> CurrentUser:
+        if not self.supabase_url or not self.supabase_anon_key:
+            raise _unauthorized("Supabase authentication is not configured.")
 
-    return cast(dict[str, Any], decoded)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.get(
+                    f"{self.supabase_url}/auth/v1/user",
+                    headers={
+                        "apikey": self.supabase_anon_key,
+                        "Authorization": f"Bearer {access_token}",
+                    },
+                )
+        except httpx.HTTPError as exc:
+            raise _unauthorized() from exc
 
+        if response.status_code != status.HTTP_200_OK:
+            raise _unauthorized()
 
-def verify_supabase_jwt(token: str, jwt_secret: str) -> CurrentUser:
-    if not jwt_secret:
-        raise _unauthorized("Supabase JWT verification is not configured.")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise _unauthorized() from exc
 
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise _unauthorized()
+        if not isinstance(payload, dict):
+            raise _unauthorized()
 
-    header = _decode_json_segment(parts[0])
-    if header.get("alg") != "HS256":
-        raise _unauthorized()
+        user_id = _get_string(payload, "id")
+        if user_id is None:
+            raise _unauthorized()
 
-    signed_data = f"{parts[0]}.{parts[1]}".encode()
-    expected_signature = hmac.new(
-        jwt_secret.encode(),
-        signed_data,
-        hashlib.sha256,
-    ).digest()
-    actual_signature = _decode_base64_url(parts[2])
+        try:
+            parsed_user_id = UUID(user_id)
+        except ValueError as exc:
+            raise _unauthorized() from exc
 
-    if not hmac.compare_digest(expected_signature, actual_signature):
-        raise _unauthorized()
-
-    claims = _decode_json_segment(parts[1])
-    expires_at = claims.get("exp")
-    if isinstance(expires_at, int | float) and expires_at < time.time():
-        raise _unauthorized("Authentication token has expired.")
-
-    subject = claims.get("sub")
-    if not isinstance(subject, str):
-        raise _unauthorized()
-
-    email = claims.get("email")
-    return CurrentUser(
-        id=UUID(subject),
-        email=email if isinstance(email, str) else None,
-    )
+        return CurrentUser(
+            id=parsed_user_id,
+            email=_get_string(payload, "email"),
+        )
 
 
 async def get_current_user(
@@ -96,4 +90,8 @@ async def get_current_user(
         raise _unauthorized()
 
     settings = get_settings()
-    return verify_supabase_jwt(credentials.credentials, settings.supabase_jwt_secret)
+    verifier = SupabaseAuthVerifier(
+        supabase_url=settings.supabase_url,
+        supabase_anon_key=settings.supabase_anon_key,
+    )
+    return await verifier.verify_token(credentials.credentials)

@@ -32,6 +32,8 @@ Initial repository documentation is complete. Backend and frontend foundations h
 - Added Supabase auth foundation with backend Bearer token verification and `/me`.
 - Protected `GET /documents` behind the auth dependency while keeping its response empty.
 - Added frontend Supabase client setup, email/password login, logout, dashboard auth gate, and API token attachment.
+- Updated backend auth verification to validate access tokens through the Supabase Auth user endpoint.
+- Added frontend sign-up support to the login page.
 
 ## Not Started
 
