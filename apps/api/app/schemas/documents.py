@@ -14,3 +14,7 @@ class DocumentSummary(BaseModel):
     filename: str
     status: DocumentStatus
     created_at: datetime
+
+
+class DocumentUploadResponse(DocumentSummary):
+    duplicate: bool

@@ -34,18 +34,26 @@ Initial repository documentation is complete. Backend and frontend foundations h
 - Added frontend Supabase client setup, email/password login, logout, dashboard auth gate, and API token attachment.
 - Updated backend auth verification to validate access tokens through the Supabase Auth user endpoint.
 - Added frontend sign-up support to the login page.
+- Added real `POST /documents/upload` with authenticated multipart upload validation.
+- Added SHA-256 duplicate detection per user before storing uploaded originals.
+- Added Supabase Storage upload and `documents` table insertion for pending documents.
+- Replaced placeholder `GET /documents` with Supabase-backed user document listing.
+- Updated the frontend Documents page with real upload, loading, error, duplicate, and listing states.
+- Added backend route tests for document upload auth, type validation, size limits, duplicates, and listing auth.
 
 ## Not Started
 
 - RAG ingestion implementation
+- Text extraction implementation
+- Embedding generation
 - Model router implementation
 - n8n service implementation
 - Langfuse instrumentation
 
 ## Next Recommended Milestones
 
-1. Build document listing against Supabase with RLS-backed ownership.
-2. Build document upload and ingestion as the first vertical slice.
+1. Smoke-test document upload against the configured Supabase project and `documents` Storage bucket.
+2. Build document ingestion as the next vertical slice.
 3. Add Langfuse instrumentation around future model and RAG calls.
 4. Implement `model_router.py` through LiteLLM.
 5. Implement approved workflow triggers through `n8n_service.py`.

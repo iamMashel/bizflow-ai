@@ -34,7 +34,7 @@ BizFlow AI is a production-style full-stack Agentic RAG Automation Platform for 
 
 ## Current State
 
-The repository contains initial documentation only. Application code has not started.
+The repository contains FastAPI and Next.js foundations with Supabase auth, protected backend routes, and an initial document upload/listing slice. Users can upload original PDF, DOCX, TXT, MD, and CSV files; the backend validates size/type, hashes bytes, detects duplicates per user, stores originals in Supabase Storage, and inserts pending document rows. RAG ingestion, extraction, embeddings, chat, proposal generation, and workflow execution have not started.
 
 ## Key Design Boundaries
 

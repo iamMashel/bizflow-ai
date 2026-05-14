@@ -15,6 +15,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 class CurrentUser:
     id: UUID
     email: str | None = None
+    access_token: str = ""
 
 
 def _unauthorized(detail: str = "Invalid or missing authentication token.") -> HTTPException:
@@ -80,6 +81,7 @@ class SupabaseAuthVerifier:
         return CurrentUser(
             id=parsed_user_id,
             email=_get_string(payload, "email"),
+            access_token=access_token,
         )
 
 
