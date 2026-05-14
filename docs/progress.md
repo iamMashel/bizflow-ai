@@ -106,31 +106,26 @@ upload -> extract text -> chunk -> embed -> store chunks -> update status.
 
 ### Completed
 
-- Gemini embedding settings added:
-  `GEMINI_API_KEY`, `DEFAULT_EMBEDDING_PROVIDER`, `DEFAULT_EMBEDDING_MODEL`,
-  and `EMBEDDING_DIMENSIONS`.
-- Installed `google-genai` in the backend.
-- Added an embedding service with Gemini as the current provider.
-- Updated `document_chunks.embedding` migration target to `extensions.vector(3072)`.
-- Added TXT/MD-only ingestion service.
-- Added authenticated `POST /documents/{document_id}/ingest`.
-- Added frontend Ingest action for pending/failed documents.
-- Ingestion verifies document ownership through authenticated Supabase access.
-- Ingestion downloads original files from the private `documents` Storage bucket.
-- Ingestion chunks text, embeds chunks, inserts `document_chunks`, and updates document status.
-- Failed ingestion marks the document as `failed`.
+- Added TXT/MD ingestion flow.
+- Added Gemini embedding support.
+- Added `document_chunks` storage with 3072-dimensional vectors.
+- Added status transition: pending -> processing -> completed / failed.
+- Added Ingest action in the documents dashboard.
+- Verified `bizflow-test.txt` ingests into 1 chunk.
 
 ### Verified
 
-- Unauthenticated ingest returns 401.
-- Other users' documents are hidden behind a 404-style service response.
-- TXT and MD extraction paths are covered by mocked tests.
-- Chunk creation and mocked embeddings are covered by tests.
-- Successful ingestion updates status to `completed`.
-- Failed ingestion updates status to `failed`.
+- `bizflow-test.txt` moved to completed.
+- Chunk row created in `public.document_chunks`.
+- Existing DOCX remains pending because DOCX parsing is not implemented yet.
 
-### Not Included
+### Key decisions
 
-- PDF/DOCX extraction.
-- RAG chat.
-- Retrieval/citation generation.
+- Use Gemini embeddings for now.
+- Use vector(3072) for Gemini embedding compatibility.
+- Start with TXT/MD only before PDF/DOCX support.
+
+### Next
+
+Build basic RAG chat:
+question -> embed query -> retrieve chunks -> generate answer with citations.
