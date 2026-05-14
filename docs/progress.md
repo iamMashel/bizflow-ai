@@ -44,22 +44,24 @@ Initial repository documentation is complete. Backend and frontend foundations h
 - Added provider-neutral embedding service using Gemini embeddings.
 - Added `POST /documents/{document_id}/ingest` for TXT/MD ingestion.
 - Added TXT/MD text extraction, chunking, mocked embedding tests, chunk inserts, and document status transitions.
+- Added basic authenticated RAG chunk search endpoint.
+- Added Chat page search form that displays matching chunks without generating answers.
+- Added basic RAG answer generation with citations from retrieved chunks.
 
 ## Not Started
 
 - PDF/DOCX ingestion implementation
-- RAG chat implementation
+- Chat memory
 - Model router implementation
 - n8n service implementation
 - Langfuse instrumentation
 
 ## Next Recommended Milestones
 
-1. Smoke-test TXT/MD ingestion against the configured Supabase project.
-2. Build RAG retrieval and chat with citations.
-3. Add Langfuse instrumentation around future model and RAG calls.
-4. Implement `model_router.py` through LiteLLM.
-5. Implement approved workflow triggers through `n8n_service.py`.
+1. Smoke-test RAG answer generation against the configured Supabase project.
+2. Add Langfuse instrumentation around future model and RAG calls.
+3. Implement `model_router.py` through LiteLLM.
+4. Implement approved workflow triggers through `n8n_service.py`.
 
 ## Rules To Preserve
 
@@ -129,3 +131,48 @@ upload -> extract text -> chunk -> embed -> store chunks -> update status.
 
 Build basic RAG chat:
 question -> embed query -> retrieve chunks -> generate answer with citations.
+
+## RAG Search Milestone
+
+### Completed
+
+- Added authenticated `POST /rag/search`.
+- Query embeddings use the Gemini embedding service.
+- Search calls a Supabase RPC over `public.document_chunks` vector similarity.
+- Results are scoped to the authenticated user through Supabase auth/RLS.
+- Chat page can submit a question and display matching chunks.
+
+### Not Included
+
+- Final AI answer generation.
+- Chat memory.
+- PDF/DOCX parsing.
+- Hybrid search.
+
+### Next
+
+Build basic RAG answer generation:
+question -> embed query -> retrieve chunks -> generate answer with citations.
+
+## RAG Answer Milestone
+
+### Completed
+
+- Added authenticated `POST /rag/answer`.
+- Reused RAG chunk search before answer generation.
+- Added a provider-neutral generation service using Gemini for text generation.
+- Built grounded prompts from the user question, filenames, chunk indexes, and retrieved content.
+- Returned answers with citations containing document ID, filename, chunk index, and preview.
+- Updated the Chat page with Search chunks and Generate answer actions.
+
+### Not Included
+
+- Chat memory.
+- Streaming responses.
+- PDF/DOCX parsing.
+- Final LiteLLM model router integration.
+
+### Next
+
+Build basic chat history:
+question -> retrieve chunks -> generate answer -> persist message and citations.

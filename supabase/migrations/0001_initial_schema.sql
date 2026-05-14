@@ -360,6 +360,47 @@ using ivfflat (embedding extensions.vector_cosine_ops)
 with (lists = 100);
 
 -- ------------------------------------------------------------
+-- RAG search RPC
+-- ------------------------------------------------------------
+
+create or replace function public.match_document_chunks(
+  query_embedding extensions.vector(3072),
+  match_count int default 5,
+  match_user_id uuid default auth.uid()
+)
+returns table (
+  chunk_id uuid,
+  document_id uuid,
+  filename text,
+  chunk_index int,
+  content text,
+  similarity double precision
+)
+language sql
+stable
+set search_path = public, extensions
+as $$
+  select
+    dc.id as chunk_id,
+    dc.document_id,
+    d.filename,
+    dc.chunk_index,
+    dc.content,
+    1 - (dc.embedding <=> query_embedding) as similarity
+  from public.document_chunks dc
+  join public.documents d on d.id = dc.document_id
+  where dc.user_id = match_user_id
+    and d.user_id = match_user_id
+    and auth.uid() = match_user_id
+    and dc.embedding is not null
+  order by dc.embedding <=> query_embedding
+  limit least(match_count, 20);
+$$;
+
+grant execute on function public.match_document_chunks(extensions.vector, int, uuid)
+to authenticated;
+
+-- ------------------------------------------------------------
 -- Reload PostgREST schema cache
 -- ------------------------------------------------------------
 
