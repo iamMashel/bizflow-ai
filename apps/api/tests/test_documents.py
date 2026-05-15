@@ -7,6 +7,7 @@ from app.api.routes_documents import (
     get_document_service,
     get_ingestion_service,
     get_metadata_service,
+    get_summary_service,
 )
 from app.core.config import Settings, get_settings
 from app.core.security import CurrentUser, get_current_user
@@ -15,10 +16,13 @@ from app.schemas.documents import (
     DocumentMetadata,
     DocumentMetadataResponse,
     DocumentSummary,
+    DocumentSummaryGeneration,
+    DocumentSummaryResponse,
     DocumentUploadResponse,
 )
 from app.services.document_metadata_service import DocumentMetadataServiceError
 from app.services.document_service import DocumentService
+from app.services.document_summary_service import DocumentSummaryServiceError
 from app.services.ingestion_service import IngestionResult, IngestionServiceError
 
 USER_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -124,6 +128,44 @@ class FakeMetadataService:
         )
 
 
+class FakeSummaryService:
+    def __init__(self, *, error: DocumentSummaryServiceError | None = None) -> None:
+        self.error = error
+
+    async def generate_summary(
+        self,
+        *,
+        document_id: UUID,
+        user_id: UUID,
+        access_token: str,
+    ) -> DocumentSummaryResponse:
+        assert document_id == DOCUMENT_ID
+        assert user_id == USER_ID
+        assert access_token == "test-access-token"
+        if self.error is not None:
+            raise self.error
+        generated = DocumentSummaryGeneration(
+            concise_summary="Short summary.",
+            detailed_summary="Detailed summary.",
+            key_points=["A key point"],
+            recommended_actions=["Review next step"],
+            suggested_workflow="proposal_review",
+        )
+        return DocumentSummaryResponse(
+            id=document_id,
+            filename="proposal.pdf",
+            summary=generated.concise_summary,
+            metadata={
+                "existing_field": "kept",
+                "key_points": generated.key_points,
+                "recommended_actions": generated.recommended_actions,
+                "suggested_workflow": generated.suggested_workflow,
+                "detailed_summary": generated.detailed_summary,
+            },
+            generated=generated,
+        )
+
+
 def override_user() -> CurrentUser:
     return CurrentUser(
         id=USER_ID,
@@ -146,6 +188,7 @@ def setup_overrides(
     service: FakeDocumentService | None = None,
     ingestion_service: FakeIngestionService | None = None,
     metadata_service: FakeMetadataService | None = None,
+    summary_service: FakeSummaryService | None = None,
     max_upload_bytes: int = 20 * 1024 * 1024,
 ) -> None:
     app.dependency_overrides[get_current_user] = override_user
@@ -157,6 +200,7 @@ def setup_overrides(
     app.dependency_overrides[get_metadata_service] = lambda: (
         metadata_service or FakeMetadataService()
     )
+    app.dependency_overrides[get_summary_service] = lambda: summary_service or FakeSummaryService()
 
 
 def test_documents_rejects_missing_token() -> None:
@@ -363,6 +407,61 @@ def test_document_metadata_hides_other_users_documents() -> None:
 
     try:
         response = client.post(f"/documents/{DOCUMENT_ID}/metadata")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_document_summary_rejects_missing_token() -> None:
+    client = TestClient(app)
+
+    response = client.post(f"/documents/{DOCUMENT_ID}/summary")
+
+    assert response.status_code == 401
+
+
+def test_document_summary_returns_generated_summary() -> None:
+    setup_overrides()
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/summary")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(DOCUMENT_ID),
+        "filename": "proposal.pdf",
+        "summary": "Short summary.",
+        "metadata": {
+            "existing_field": "kept",
+            "key_points": ["A key point"],
+            "recommended_actions": ["Review next step"],
+            "suggested_workflow": "proposal_review",
+            "detailed_summary": "Detailed summary.",
+        },
+        "generated": {
+            "concise_summary": "Short summary.",
+            "detailed_summary": "Detailed summary.",
+            "key_points": ["A key point"],
+            "recommended_actions": ["Review next step"],
+            "suggested_workflow": "proposal_review",
+        },
+    }
+
+
+def test_document_summary_hides_other_users_documents() -> None:
+    setup_overrides(
+        summary_service=FakeSummaryService(
+            error=DocumentSummaryServiceError("Document not found.", status_code=404)
+        )
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/summary")
     finally:
         app.dependency_overrides.clear()
 

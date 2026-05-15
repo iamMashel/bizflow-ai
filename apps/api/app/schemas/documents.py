@@ -55,3 +55,19 @@ class DocumentMetadataResponse(BaseModel):
     filename: str
     summary: str | None
     metadata: DocumentMetadata
+
+
+class DocumentSummaryGeneration(BaseModel):
+    concise_summary: str
+    detailed_summary: str
+    key_points: list[str]
+    recommended_actions: list[str]
+    suggested_workflow: str | None
+
+
+class DocumentSummaryResponse(BaseModel):
+    id: UUID
+    filename: str
+    summary: str
+    metadata: dict[str, Any]
+    generated: DocumentSummaryGeneration

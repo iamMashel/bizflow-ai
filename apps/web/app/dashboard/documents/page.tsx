@@ -35,6 +35,8 @@ type DocumentMetadata = {
   missing_information?: string[];
   recommended_actions?: string[];
   recommended_workflow?: string | null;
+  suggested_workflow?: string | null;
+  detailed_summary?: string;
   confidence?: number;
 };
 
@@ -43,6 +45,22 @@ type DocumentMetadataResponse = {
   filename: string;
   summary: string | null;
   metadata: DocumentMetadata;
+};
+
+type DocumentSummaryGeneration = {
+  concise_summary: string;
+  detailed_summary: string;
+  key_points: string[];
+  recommended_actions: string[];
+  suggested_workflow: string | null;
+};
+
+type DocumentSummaryResponse = {
+  id: string;
+  filename: string;
+  summary: string;
+  metadata: DocumentMetadata;
+  generated: DocumentSummaryGeneration;
 };
 
 const acceptedFileTypes = ".pdf,.docx,.txt,.md,.csv";
@@ -92,6 +110,7 @@ export default function DocumentsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null);
   const [extractingDocumentId, setExtractingDocumentId] = useState<string | null>(null);
+  const [summarizingDocumentId, setSummarizingDocumentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -227,6 +246,37 @@ export default function DocumentsPage() {
     }
   }
 
+  async function handleGenerateSummary(document: DocumentSummary) {
+    setSummarizingDocumentId(document.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await apiClient.request<DocumentSummaryResponse>(
+        `/documents/${document.id}/summary`,
+        {
+          method: "POST",
+        },
+      );
+      setSuccessMessage(`${response.filename} summary generated.`);
+      setDocuments((currentDocuments) =>
+        currentDocuments.map((currentDocument) =>
+          currentDocument.id === response.id
+            ? {
+                ...currentDocument,
+                summary: response.summary,
+                metadata: response.metadata,
+              }
+            : currentDocument,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to generate summary.");
+    } finally {
+      setSummarizingDocumentId(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -303,8 +353,10 @@ export default function DocumentsPage() {
               {documents.map((document) => {
                 const isIngesting = ingestingDocumentId === document.id;
                 const isExtracting = extractingDocumentId === document.id;
+                const isSummarizing = summarizingDocumentId === document.id;
                 const hasMetadata = Boolean(document.metadata || document.summary);
                 const metadata = document.metadata;
+                const workflow = metadata?.recommended_workflow ?? metadata?.suggested_workflow;
 
                 return (
                   <Fragment key={document.id}>
@@ -344,6 +396,16 @@ export default function DocumentsPage() {
                               type="button"
                             >
                               {isExtracting ? "Extracting" : "Extract metadata"}
+                            </button>
+                          ) : null}
+                          {canExtractMetadata(document.status) ? (
+                            <button
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isSummarizing || summarizingDocumentId !== null}
+                              onClick={() => void handleGenerateSummary(document)}
+                              type="button"
+                            >
+                              {isSummarizing ? "Generating" : "Generate summary"}
                             </button>
                           ) : null}
                           {!canIngest(document.status) && !canExtractMetadata(document.status) ? (
@@ -391,8 +453,14 @@ export default function DocumentsPage() {
                                 />
                                 <MetadataField
                                   label="Workflow"
-                                  value={metadata.recommended_workflow ?? "None"}
+                                  value={workflow ?? "None"}
                                 />
+                                {metadata.detailed_summary ? (
+                                  <MetadataField
+                                    label="Detailed summary"
+                                    value={metadata.detailed_summary}
+                                  />
+                                ) : null}
                               </div>
                             ) : null}
                           </div>

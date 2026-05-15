@@ -9,6 +9,7 @@ from app.schemas.documents import (
     DocumentIngestResponse,
     DocumentMetadataResponse,
     DocumentSummary,
+    DocumentSummaryResponse,
     DocumentUploadResponse,
 )
 from app.services.document_metadata_service import (
@@ -16,6 +17,10 @@ from app.services.document_metadata_service import (
     DocumentMetadataServiceError,
 )
 from app.services.document_service import DocumentService, DocumentServiceError
+from app.services.document_summary_service import (
+    DocumentSummaryService,
+    DocumentSummaryServiceError,
+)
 from app.services.ingestion_service import IngestionService, IngestionServiceError
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -39,6 +44,12 @@ def get_metadata_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DocumentMetadataService:
     return DocumentMetadataService(settings)
+
+
+def get_summary_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DocumentSummaryService:
+    return DocumentSummaryService(settings)
 
 
 def _file_extension(filename: str) -> str:
@@ -116,6 +127,22 @@ async def extract_document_metadata(
             access_token=current_user.access_token,
         )
     except DocumentMetadataServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post("/{document_id}/summary", response_model=DocumentSummaryResponse)
+async def generate_document_summary(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    service: Annotated[DocumentSummaryService, Depends(get_summary_service)],
+) -> DocumentSummaryResponse:
+    try:
+        return await service.generate_summary(
+            document_id=document_id,
+            user_id=current_user.id,
+            access_token=current_user.access_token,
+        )
+    except DocumentSummaryServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 

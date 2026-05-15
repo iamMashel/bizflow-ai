@@ -230,6 +230,34 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 
 - Build proposal generation from extracted metadata and retrieved context.
 
+## Document Summary Actions Milestone
+
+### Completed
+
+- Added authenticated `POST /documents/{document_id}/summary`.
+- Summary generation requires an ingested completed document with chunks.
+- Gemini 2.5 Flash generates concise summary, detailed summary, key points, recommended actions, and suggested workflow.
+- Concise summaries are saved to `documents.summary`.
+- Key points, recommended actions, suggested workflow, and detailed summary are merged into `documents.metadata`.
+- Documents page can generate and display summaries and recommended actions.
+
+### Verified
+
+- Unauthenticated summary requests return 401.
+- Other users' documents remain hidden through user-scoped lookups.
+- Documents without chunks return a useful ingest-first error.
+- Summary LLM calls are mocked in tests.
+- Existing metadata fields are preserved during summary updates.
+
+### Not Included
+
+- n8n workflow triggers.
+- Proposal generation.
+
+### Next
+
+- Build proposal generation from extracted metadata and retrieved context.
+
 ## PDF Ingestion Milestone
 
 ### Completed
