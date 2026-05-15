@@ -318,6 +318,49 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 
 - Connect the approved n8n webhook to a safe Google Sheets lead log workflow.
 
+## n8n Google Sheets Automation Milestone
+
+### Completed
+
+- Connected BizFlow approved workflow execution to n8n production webhook.
+- Configured n8n to receive workflow payloads without manual listening.
+- Added Google Sheets append/update workflow log.
+- Verified workflow status completes after n8n execution.
+
+### Verified
+
+- BizFlow Execute triggers n8n automatically.
+- Google Sheet receives workflow payload row.
+- Backend marks workflow as completed.
+
+## Langfuse Observability Milestone
+
+### Completed
+
+- Added Langfuse configuration with an enabled/disabled switch.
+- Added a centralized observability wrapper that no-ops when Langfuse is disabled or unconfigured.
+- Instrumented RAG answer generation.
+- Instrumented metadata extraction.
+- Instrumented document summary generation.
+- Instrumented proposal generation.
+- Instrumented email draft generation.
+- Instrumented workflow execution.
+- Captures safe metadata such as operation name, user ID, document ID, workflow ID, model, success/failure, and latency.
+
+### Safety
+
+- Does not log API keys.
+- Does not log webhook secrets.
+- Does not log full private documents.
+- Does not log full embeddings.
+- App continues normally when Langfuse is disabled.
+
+### Verified
+
+- Disabled Langfuse behavior is a no-op in tests.
+- Success traces record safe metadata.
+- Failure traces record error type/message without swallowing the original error.
+
 ## Proposal Generation Milestone
 
 ### Completed

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from app.core.config import Settings, get_settings
 from app.schemas.documents import DocumentMetadata, DocumentMetadataResponse
 from app.services.generation_service import GenerationService, GenerationServiceError
+from app.services.observability_service import ObservabilityService
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,11 @@ class DocumentMetadataService:
         self,
         settings: Settings | None = None,
         generation_service: GenerationService | None = None,
+        observability_service: ObservabilityService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.generation_service = generation_service or GenerationService(self.settings)
+        self.observability = observability_service or ObservabilityService(self.settings)
         self.supabase_url = self.settings.supabase_url.rstrip("/")
         self.supabase_anon_key = self.settings.supabase_anon_key
 
@@ -82,9 +85,16 @@ class DocumentMetadataService:
             ],
         )
         try:
-            generated = self.generation_service.generate_text(
-                self._build_prompt(filename=document.filename, chunks=chunks)
-            )
+            with self.observability.trace(
+                operation="metadata_extraction",
+                user_id=user_id,
+                document_id=document_id,
+                model=self.settings.default_chat_model,
+                metadata={"chunks_count": len(chunks)},
+            ):
+                generated = self.generation_service.generate_text(
+                    self._build_prompt(filename=document.filename, chunks=chunks)
+                )
         except GenerationServiceError as exc:
             raise DocumentMetadataServiceError(str(exc), status_code=exc.status_code) from exc
 

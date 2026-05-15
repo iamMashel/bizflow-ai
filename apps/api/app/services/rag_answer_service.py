@@ -4,6 +4,7 @@ from uuid import UUID
 from app.core.security import CurrentUser
 from app.schemas.rag import RagAnswerResponse, RagCitation, RagSearchResult
 from app.services.generation_service import GenerationService, GenerationServiceError
+from app.services.observability_service import ObservabilityService
 from app.services.rag_search_service import RagSearchService, RagSearchServiceError
 
 NOT_ENOUGH_CONTEXT_MESSAGE = (
@@ -23,9 +24,11 @@ class RagAnswerService:
         self,
         search_service: RagSearchService,
         generation_service: GenerationService,
+        observability_service: ObservabilityService | None = None,
     ) -> None:
         self.search_service = search_service
         self.generation_service = generation_service
+        self.observability = observability_service or ObservabilityService()
 
     async def answer(
         self,
@@ -67,7 +70,18 @@ class RagAnswerService:
 
         prompt = self._build_prompt(query=query, chunks=chunks)
         try:
-            answer = self.generation_service.generate_text(prompt)
+            with self.observability.trace(
+                operation="rag_answer",
+                user_id=current_user.id,
+                model=_chat_model_name(self.generation_service),
+                metadata={
+                    "query_length": len(query),
+                    "match_count": match_count,
+                    "chunks_count": len(chunks),
+                    "document_ids": sorted({str(chunk.document_id) for chunk in chunks}),
+                },
+            ):
+                answer = self.generation_service.generate_text(prompt)
         except GenerationServiceError as exc:
             logger.warning(
                 "RAG answer generation failed: query_length=%s chat_model=%s exception_type=%s "

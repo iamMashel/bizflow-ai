@@ -8,6 +8,7 @@ import httpx
 from app.core.config import Settings
 from app.schemas.workflows import WorkflowRun, WorkflowType
 from app.services.n8n_service import N8nService, N8nServiceError, WorkflowTriggerRequest
+from app.services.observability_service import ObservabilityService
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,17 @@ class WorkflowServiceError(Exception):
 
 
 class WorkflowService:
-    def __init__(self, settings: Settings, n8n_service: N8nService | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        n8n_service: N8nService | None = None,
+        observability_service: ObservabilityService | None = None,
+    ) -> None:
         self.settings = settings
         self.supabase_url = settings.supabase_url.rstrip("/")
         self.supabase_anon_key = settings.supabase_anon_key
         self.n8n_service = n8n_service or N8nService(settings)
+        self.observability = observability_service or ObservabilityService(settings)
 
     async def create_preview(
         self,
@@ -147,16 +154,23 @@ class WorkflowService:
             error_message=None,
         )
         try:
-            result = await self.n8n_service.trigger_workflow(
-                WorkflowTriggerRequest(
-                    workflow_id=running.id,
-                    workflow_type=running.workflow_type,
-                    document_id=running.document_id,
-                    input_payload=running.input_payload,
-                    output_payload=running.output_payload,
-                    approved_by_user=running.approved_by_user,
+            with self.observability.trace(
+                operation="workflow_execution",
+                user_id=user_id,
+                document_id=running.document_id,
+                workflow_id=running.id,
+                metadata={"workflow_type": running.workflow_type},
+            ):
+                result = await self.n8n_service.trigger_workflow(
+                    WorkflowTriggerRequest(
+                        workflow_id=running.id,
+                        workflow_type=running.workflow_type,
+                        document_id=running.document_id,
+                        input_payload=running.input_payload,
+                        output_payload=running.output_payload,
+                        approved_by_user=running.approved_by_user,
+                    )
                 )
-            )
         except N8nServiceError as exc:
             await self._update_workflow_run(
                 user_id=user_id,

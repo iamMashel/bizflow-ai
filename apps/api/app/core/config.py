@@ -93,6 +93,22 @@ class Settings(BaseSettings):
             "BIZFLOW_N8N_WORKFLOW_WEBHOOK_URL",
         ),
     )
+    langfuse_public_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("LANGFUSE_PUBLIC_KEY", "BIZFLOW_LANGFUSE_PUBLIC_KEY"),
+    )
+    langfuse_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("LANGFUSE_SECRET_KEY", "BIZFLOW_LANGFUSE_SECRET_KEY"),
+    )
+    langfuse_host: str = Field(
+        default="https://cloud.langfuse.com",
+        validation_alias=AliasChoices("LANGFUSE_HOST", "BIZFLOW_LANGFUSE_HOST"),
+    )
+    langfuse_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("LANGFUSE_ENABLED", "BIZFLOW_LANGFUSE_ENABLED"),
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
