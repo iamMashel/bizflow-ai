@@ -10,23 +10,38 @@ DOCUMENT_ID = UUID("00000000-0000-0000-0000-000000000101")
 
 
 class FakeSpan:
-    def __init__(self) -> None:
+    def __init__(self, *, fail_update: bool = False, fail_end: bool = False) -> None:
+        self.fail_update = fail_update
+        self.fail_end = fail_end
         self.updates: list[dict[str, object]] = []
         self.ended = False
 
     def update(self, **kwargs: object) -> None:
+        if self.fail_update:
+            raise RuntimeError("langfuse update failed")
         self.updates.append(kwargs)
 
     def end(self) -> None:
+        if self.fail_end:
+            raise RuntimeError("langfuse end failed")
         self.ended = True
 
 
 class FakeLangfuseClient:
-    def __init__(self) -> None:
-        self.span = FakeSpan()
+    def __init__(
+        self,
+        *,
+        fail_start: bool = False,
+        fail_update: bool = False,
+        fail_end: bool = False,
+    ) -> None:
+        self.fail_start = fail_start
+        self.span = FakeSpan(fail_update=fail_update, fail_end=fail_end)
         self.observations: list[dict[str, object]] = []
 
     def start_observation(self, **kwargs: object) -> FakeSpan:
+        if self.fail_start:
+            raise RuntimeError("langfuse start failed")
         self.observations.append(kwargs)
         return self.span
 
@@ -105,3 +120,41 @@ def test_observability_records_failure_without_swallowing_error() -> None:
     assert update["level"] == "ERROR"
     assert update["status_message"] == "bad generation"
     assert client.span.ended is True
+
+
+def test_observability_start_failure_does_not_break_operation() -> None:
+    client = FakeLangfuseClient(fail_start=True)
+    service = ObservabilityService(
+        Settings(
+            langfuse_enabled=True,
+            langfuse_public_key="public",
+            langfuse_secret_key="secret",
+        ),
+        client=client,
+    )
+    operation_ran = False
+
+    with service.trace(operation="rag_answer", user_id=USER_ID):
+        operation_ran = True
+
+    assert operation_ran is True
+    assert client.observations == []
+
+
+def test_observability_update_and_end_failures_do_not_break_operation() -> None:
+    client = FakeLangfuseClient(fail_update=True, fail_end=True)
+    service = ObservabilityService(
+        Settings(
+            langfuse_enabled=True,
+            langfuse_public_key="public",
+            langfuse_secret_key="secret",
+        ),
+        client=client,
+    )
+    operation_ran = False
+
+    with service.trace(operation="rag_answer", user_id=USER_ID):
+        operation_ran = True
+
+    assert operation_ran is True
+    assert client.observations[0]["name"] == "rag_answer"

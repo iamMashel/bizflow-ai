@@ -22,12 +22,21 @@ class ObservabilityService:
         )
         self.client = client
         if self.client is None and self.enabled:
-            self.client = Langfuse(
-                public_key=self.settings.langfuse_public_key,
-                secret_key=self.settings.langfuse_secret_key,
-                host=self.settings.langfuse_host,
-                tracing_enabled=True,
-            )
+            try:
+                self.client = Langfuse(
+                    public_key=self.settings.langfuse_public_key,
+                    secret_key=self.settings.langfuse_secret_key,
+                    host=self.settings.langfuse_host,
+                    tracing_enabled=True,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Langfuse client initialization failed: exception_type=%s message=%s",
+                    type(exc).__name__,
+                    str(exc),
+                )
+                self.enabled = False
+                self.client = None
 
     @contextmanager
     def trace(
@@ -53,17 +62,30 @@ class ObservabilityService:
             metadata=metadata,
         )
         start = time.perf_counter()
-        span = self.client.start_observation(
-            name=operation,
-            as_type="generation" if model else "span",
-            metadata={**safe_metadata, "success": None},
-            model=model,
-        )
+        try:
+            span = self.client.start_observation(
+                name=operation,
+                as_type="generation" if model else "span",
+                metadata={**safe_metadata, "success": None},
+                model=model,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Langfuse observation start failed: operation=%s exception_type=%s message=%s",
+                operation,
+                type(exc).__name__,
+                str(exc),
+            )
+            yield
+            return
+
         try:
             yield
         except Exception as exc:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
-            span.update(
+            self._safe_update(
+                span,
+                operation=operation,
                 metadata={
                     **safe_metadata,
                     "success": False,
@@ -76,12 +98,14 @@ class ObservabilityService:
             raise
         else:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
-            span.update(
+            self._safe_update(
+                span,
+                operation=operation,
                 metadata={**safe_metadata, "success": True, "latency_ms": latency_ms},
                 level="DEFAULT",
             )
         finally:
-            span.end()
+            self._safe_end(span, operation=operation)
 
     @staticmethod
     def _safe_metadata(
@@ -103,3 +127,27 @@ class ObservabilityService:
         if metadata:
             safe_metadata.update(metadata)
         return {key: value for key, value in safe_metadata.items() if value is not None}
+
+    @staticmethod
+    def _safe_update(span: Any, *, operation: str, **kwargs: Any) -> None:
+        try:
+            span.update(**kwargs)
+        except Exception as exc:
+            logger.warning(
+                "Langfuse observation update failed: operation=%s exception_type=%s message=%s",
+                operation,
+                type(exc).__name__,
+                str(exc),
+            )
+
+    @staticmethod
+    def _safe_end(span: Any, *, operation: str) -> None:
+        try:
+            span.end()
+        except Exception as exc:
+            logger.warning(
+                "Langfuse observation end failed: operation=%s exception_type=%s message=%s",
+                operation,
+                type(exc).__name__,
+                str(exc),
+            )

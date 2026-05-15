@@ -38,9 +38,12 @@ class RagAnswerService:
         current_user: CurrentUser,
     ) -> RagAnswerResponse:
         logger.info(
-            "Starting RAG answer: query_length=%s chat_model=%s",
+            "Starting RAG answer: query_length=%s chat_model=%s gemini_api_key_configured=%s "
+            "langfuse_enabled=%s",
             len(query),
             _chat_model_name(self.generation_service),
+            _gemini_key_configured(self.generation_service),
+            self.observability.enabled,
         )
         try:
             chunks = await self.search_service.search(
@@ -85,11 +88,13 @@ class RagAnswerService:
         except GenerationServiceError as exc:
             logger.warning(
                 "RAG answer generation failed: query_length=%s chat_model=%s exception_type=%s "
-                "message=%s",
+                "message=%s gemini_api_key_configured=%s langfuse_enabled=%s",
                 len(query),
                 _chat_model_name(self.generation_service),
                 type(exc).__name__,
                 str(exc),
+                _gemini_key_configured(self.generation_service),
+                self.observability.enabled,
             )
             raise RagAnswerServiceError(str(exc), status_code=exc.status_code) from exc
 
@@ -145,3 +150,9 @@ def _chat_model_name(generation_service: GenerationService) -> str:
     settings = getattr(generation_service, "settings", None)
     model = getattr(settings, "default_chat_model", None)
     return model if isinstance(model, str) else "unknown"
+
+
+def _gemini_key_configured(generation_service: GenerationService) -> bool:
+    settings = getattr(generation_service, "settings", None)
+    gemini_api_key = getattr(settings, "gemini_api_key", None)
+    return bool(gemini_api_key)

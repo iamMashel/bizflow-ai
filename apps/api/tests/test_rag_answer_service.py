@@ -4,6 +4,7 @@ import pytest
 
 from app.core.security import CurrentUser
 from app.schemas.rag import RagSearchResult
+from app.services.observability_service import ObservabilityService
 from app.services.rag_answer_service import NOT_ENOUGH_CONTEXT_MESSAGE, RagAnswerService
 
 USER_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -42,6 +43,11 @@ class FakeGenerationService:
     def generate_text(self, prompt: str) -> str:
         self.prompts.append(prompt)
         return "The document says this is a BizFlow AI test document."
+
+
+class FailingLangfuseClient:
+    def start_observation(self, **kwargs: object) -> object:
+        raise RuntimeError("langfuse unavailable")
 
 
 def user() -> CurrentUser:
@@ -101,3 +107,34 @@ async def test_rag_answer_service_skips_llm_when_no_chunks_found() -> None:
     assert response.answer == NOT_ENOUGH_CONTEXT_MESSAGE
     assert response.citations == []
     assert generation_service.prompts == []
+
+
+@pytest.mark.asyncio
+async def test_rag_answer_service_succeeds_when_observability_fails() -> None:
+    search_service = FakeSearchService(
+        [
+            RagSearchResult(
+                chunk_id=CHUNK_ID,
+                document_id=DOCUMENT_ID,
+                filename="bizflow-test.txt",
+                chunk_index=0,
+                content="This is a BizFlow AI test document.",
+                similarity=0.91,
+            )
+        ]
+    )
+    generation_service = FakeGenerationService()
+    observability_service = ObservabilityService(
+        client=FailingLangfuseClient(),
+    )
+    observability_service.enabled = True
+    service = RagAnswerService(
+        search_service=search_service,  # type: ignore[arg-type]
+        generation_service=generation_service,  # type: ignore[arg-type]
+        observability_service=observability_service,
+    )
+
+    response = await service.answer(query="What is this?", match_count=5, current_user=user())
+
+    assert response.answer == "The document says this is a BizFlow AI test document."
+    assert response.citations[0].filename == "bizflow-test.txt"

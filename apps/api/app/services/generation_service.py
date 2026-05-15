@@ -31,7 +31,11 @@ class GenerationService:
         if self.settings.default_chat_provider != "gemini":
             raise GenerationServiceError("Configured chat provider is not supported.")
 
-        logger.info("Generating text with Gemini: model=%s", self.settings.default_chat_model)
+        logger.info(
+            "Generating text with Gemini: model=%s gemini_api_key_configured=%s",
+            self.settings.default_chat_model,
+            bool(self.settings.gemini_api_key),
+        )
         try:
             result = self.client.models.generate_content(
                 model=self.settings.default_chat_model,
