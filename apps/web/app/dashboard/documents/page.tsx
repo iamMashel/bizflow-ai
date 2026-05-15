@@ -101,6 +101,12 @@ type DocumentEmailDraftResponse = {
   metadata: DocumentMetadata;
 };
 
+type WorkflowPreviewResponse = {
+  id: string;
+  workflow_type: string;
+  status: string;
+};
+
 const acceptedFileTypes = ".pdf,.docx,.txt,.md,.csv";
 
 function formatDate(value: string) {
@@ -151,6 +157,7 @@ export default function DocumentsPage() {
   const [summarizingDocumentId, setSummarizingDocumentId] = useState<string | null>(null);
   const [proposalDocumentId, setProposalDocumentId] = useState<string | null>(null);
   const [emailDraftDocumentId, setEmailDraftDocumentId] = useState<string | null>(null);
+  const [workflowPreviewDocumentId, setWorkflowPreviewDocumentId] = useState<string | null>(null);
   const [copiedEmailDraftId, setCopiedEmailDraftId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -389,6 +396,29 @@ export default function DocumentsPage() {
     setCopiedEmailDraftId(documentId);
   }
 
+  async function handleCreateWorkflowPreview(document: DocumentSummary) {
+    setWorkflowPreviewDocumentId(document.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await apiClient.request<WorkflowPreviewResponse>("/workflows/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          document_id: document.id,
+          workflow_type: "proposal_follow_up",
+        }),
+      });
+      setSuccessMessage(
+        `${document.filename} workflow preview created with status ${response.status}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to preview workflow.");
+    } finally {
+      setWorkflowPreviewDocumentId(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -468,11 +498,15 @@ export default function DocumentsPage() {
                 const isSummarizing = summarizingDocumentId === document.id;
                 const isGeneratingProposal = proposalDocumentId === document.id;
                 const isGeneratingEmailDraft = emailDraftDocumentId === document.id;
+                const isCreatingWorkflowPreview = workflowPreviewDocumentId === document.id;
                 const hasMetadata = Boolean(document.metadata || document.summary);
                 const metadata = document.metadata;
                 const workflow = metadata?.recommended_workflow ?? metadata?.suggested_workflow;
                 const proposal = metadata?.proposal_draft;
                 const emailDraft = metadata?.email_draft;
+                const canPreviewWorkflow = canExtractMetadata(document.status) && Boolean(
+                  proposal || emailDraft,
+                );
 
                 return (
                   <Fragment key={document.id}>
@@ -542,6 +576,18 @@ export default function DocumentsPage() {
                               type="button"
                             >
                               {isGeneratingEmailDraft ? "Generating" : "Generate email draft"}
+                            </button>
+                          ) : null}
+                          {canPreviewWorkflow ? (
+                            <button
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={
+                                isCreatingWorkflowPreview || workflowPreviewDocumentId !== null
+                              }
+                              onClick={() => void handleCreateWorkflowPreview(document)}
+                              type="button"
+                            >
+                              {isCreatingWorkflowPreview ? "Creating" : "Preview workflow"}
                             </button>
                           ) : null}
                           {!canIngest(document.status) && !canExtractMetadata(document.status) ? (

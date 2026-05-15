@@ -257,6 +257,37 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 
 - Add human approval and n8n workflow trigger support.
 
+## Workflow Preview And Approval Milestone
+
+### Completed
+
+- Added authenticated `POST /workflows/preview`.
+- Added authenticated `POST /workflows/{workflow_id}/approve`.
+- Added authenticated `GET /workflows`.
+- Workflow previews create `workflow_runs` rows with status `pending`.
+- Preview payloads are built from existing document summary, metadata, proposal draft, email draft, and recommended actions.
+- Approval updates workflow runs to status `approved` with `approved_by_user = true`.
+- Documents page can create a workflow preview for completed documents with proposal or email draft output.
+- Workflows page lists workflow runs, displays input and preview payloads, and supports approval.
+
+### Verified
+
+- Unauthenticated workflow endpoints return 401.
+- Other users' workflow runs remain hidden through user-scoped lookups.
+- Preview creation returns a pending workflow run.
+- Approval returns an approved workflow run.
+- Listing returns current-user workflow runs.
+
+### Not Included
+
+- n8n webhook calls.
+- Email sending.
+- New AI generation.
+
+### Next
+
+- Connect approved workflow runs to n8n through `n8n_service.py`.
+
 ## Proposal Generation Milestone
 
 ### Completed
