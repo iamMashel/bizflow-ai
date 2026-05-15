@@ -200,4 +200,48 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 
 ### Next
 
-- Add DOCX ingestion support.
+- Add OCR or richer PDF layout parsing when needed.
+
+## PDF Ingestion Milestone
+
+### Completed
+
+- Added PDF text extraction with `pypdf`.
+- Existing TXT/MD/DOCX ingestion remains supported.
+- PDF text is extracted page by page.
+- PDF chunks preserve page number metadata where possible.
+- PDF ingestion reuses the existing chunking and Gemini embedding pipeline.
+
+### Verified
+
+- PDF extraction unit test covers page text and page metadata.
+- Mocked embeddings are used in ingestion tests.
+- Document status moves to `completed` on successful PDF ingestion.
+
+### Not Included
+
+- OCR for scanned PDFs.
+- Rich table/layout parsing.
+
+### Next
+
+- Add OCR or richer PDF layout parsing when needed.
+
+## DOCX Ingestion Milestone
+
+### Completed
+
+- Added DOCX text extraction.
+- Reused existing chunking and Gemini embedding pipeline.
+- DOCX documents can now move from pending -> processing -> completed.
+- Grounded RAG answers work over ingested DOCX content.
+
+### Verified
+
+- DOCX upload works.
+- DOCX ingestion works.
+- Chat can answer questions from ingested DOCX chunks.
+
+### Next
+
+- Add PDF ingestion support.

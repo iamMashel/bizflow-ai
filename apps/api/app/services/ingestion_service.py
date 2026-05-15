@@ -1,17 +1,20 @@
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
+from io import BytesIO
 from typing import Any, cast
 from uuid import UUID
 
 import httpx
+from docx import Document
+from pypdf import PdfReader
 
 from app.core.config import Settings, get_settings
 from app.services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md"}
+SUPPORTED_INGESTION_EXTENSIONS = {".txt", ".md", ".docx", ".pdf"}
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
 
@@ -56,6 +59,24 @@ class IngestionResult:
     chunks_created: int
 
 
+@dataclass(frozen=True)
+class ExtractedPage:
+    page_number: int
+    text: str
+
+
+@dataclass(frozen=True)
+class ExtractedText:
+    text: str
+    pages: list[ExtractedPage]
+
+
+@dataclass(frozen=True)
+class IngestionChunk:
+    content: str
+    metadata: dict[str, Any]
+
+
 class IngestionService:
     def __init__(
         self,
@@ -82,9 +103,9 @@ class IngestionService:
             access_token=access_token,
         )
 
-        if self._extension(document.filename) not in SUPPORTED_TEXT_EXTENSIONS:
+        if self._extension(document.filename) not in SUPPORTED_INGESTION_EXTENSIONS:
             raise IngestionServiceError(
-                "Only TXT and MD ingestion is currently supported.",
+                "Only TXT, MD, DOCX, and PDF ingestion is currently supported.",
                 status_code=400,
             )
 
@@ -100,15 +121,15 @@ class IngestionService:
                 stage=IngestionStage.DOWNLOAD_FILE,
                 operation=lambda: self._download_storage_object(document.storage_path),
             )
-            text = self._run_sync_stage(
+            extracted_text = self._run_sync_stage(
                 document_id=document_id,
                 stage=IngestionStage.EXTRACT_TEXT,
-                operation=lambda: self._extract_text(content),
+                operation=lambda: self._extract_text(content, document.filename),
             )
             chunks = self._run_sync_stage(
                 document_id=document_id,
                 stage=IngestionStage.CHUNK_TEXT,
-                operation=lambda: self.chunk_text(text),
+                operation=lambda: self.chunk_extracted_text(extracted_text),
             )
             await self._run_stage(
                 document_id=document_id,
@@ -225,7 +246,7 @@ class IngestionService:
         document_id: UUID,
         user_id: UUID,
         access_token: str,
-        chunks: list[str],
+        chunks: list[IngestionChunk],
     ) -> None:
         await self._delete_existing_chunks(
             document_id=document_id,
@@ -242,10 +263,10 @@ class IngestionService:
                     "document_id": str(document_id),
                     "user_id": str(user_id),
                     "chunk_index": index,
-                    "content": chunk,
-                    "token_count": self._estimate_token_count(chunk),
-                    "metadata": {},
-                    "embedding": self._embed_chunk(document_id=document_id, chunk=chunk),
+                    "content": chunk.content,
+                    "token_count": self._estimate_token_count(chunk.content),
+                    "metadata": chunk.metadata,
+                    "embedding": self._embed_chunk(document_id=document_id, chunk=chunk.content),
                 }
             )
 
@@ -372,14 +393,83 @@ class IngestionService:
             raise IngestionServiceError("Supabase ingestion storage is not configured.")
 
     @staticmethod
-    def _extract_text(content: bytes) -> str:
+    def _extract_text(content: bytes, filename: str) -> ExtractedText:
+        extension = IngestionService._extension(filename)
+        if extension == ".docx":
+            return ExtractedText(
+                text=IngestionService._extract_docx_text(content),
+                pages=[],
+            )
+        if extension == ".pdf":
+            return IngestionService._extract_pdf_text(content)
+
         try:
-            return content.decode("utf-8")
+            text = content.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise IngestionServiceError(
                 "Uploaded text document must be valid UTF-8.",
                 status_code=400,
             ) from exc
+        return ExtractedText(text=text, pages=[])
+
+    @staticmethod
+    def _extract_docx_text(content: bytes) -> str:
+        try:
+            document = Document(BytesIO(content))
+        except Exception as exc:
+            raise IngestionServiceError(
+                "Uploaded DOCX document could not be read.",
+                status_code=400,
+            ) from exc
+
+        text_parts = [paragraph.text.strip() for paragraph in document.paragraphs]
+        for table in document.tables:
+            for row in table.rows:
+                row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if row_text:
+                    text_parts.append(row_text)
+
+        return "\n\n".join(part for part in text_parts if part)
+
+    @staticmethod
+    def _extract_pdf_text(content: bytes) -> ExtractedText:
+        try:
+            reader = PdfReader(BytesIO(content))
+        except Exception as exc:
+            raise IngestionServiceError(
+                "Uploaded PDF document could not be read.",
+                status_code=400,
+            ) from exc
+
+        pages: list[ExtractedPage] = []
+        for index, page in enumerate(reader.pages, start=1):
+            page_text = (page.extract_text() or "").strip()
+            if page_text:
+                pages.append(ExtractedPage(page_number=index, text=page_text))
+
+        return ExtractedText(
+            text="\n\n".join(page.text for page in pages),
+            pages=pages,
+        )
+
+    @staticmethod
+    def chunk_extracted_text(extracted_text: ExtractedText) -> list[IngestionChunk]:
+        if extracted_text.pages:
+            chunks: list[IngestionChunk] = []
+            for page in extracted_text.pages:
+                chunks.extend(
+                    IngestionChunk(
+                        content=chunk,
+                        metadata={"page_number": page.page_number},
+                    )
+                    for chunk in IngestionService.chunk_text(page.text)
+                )
+            return chunks
+
+        return [
+            IngestionChunk(content=chunk, metadata={})
+            for chunk in IngestionService.chunk_text(extracted_text.text)
+        ]
 
     @staticmethod
     def chunk_text(
