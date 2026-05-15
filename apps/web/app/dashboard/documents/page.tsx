@@ -37,6 +37,8 @@ type DocumentMetadata = {
   recommended_workflow?: string | null;
   suggested_workflow?: string | null;
   detailed_summary?: string;
+  proposal_draft?: ProposalDraft;
+  email_draft?: EmailDraft;
   confidence?: number;
 };
 
@@ -61,6 +63,42 @@ type DocumentSummaryResponse = {
   summary: string;
   metadata: DocumentMetadata;
   generated: DocumentSummaryGeneration;
+};
+
+type ProposalDraft = {
+  proposal_title: string;
+  executive_summary: string;
+  client_problem: string | null;
+  proposed_solution: string;
+  scope_of_work: string[];
+  deliverables: string[];
+  timeline: string[];
+  assumptions: string[];
+  missing_information: string[];
+  next_steps: string[];
+};
+
+type DocumentProposalResponse = {
+  id: string;
+  filename: string;
+  proposal: ProposalDraft;
+  metadata: DocumentMetadata;
+};
+
+type EmailDraft = {
+  subject: string;
+  body: string;
+  purpose: string;
+  recipient_context: string | null;
+  missing_information_questions: string[];
+  call_to_action: string | null;
+};
+
+type DocumentEmailDraftResponse = {
+  id: string;
+  filename: string;
+  email_draft: EmailDraft;
+  metadata: DocumentMetadata;
 };
 
 const acceptedFileTypes = ".pdf,.docx,.txt,.md,.csv";
@@ -111,6 +149,9 @@ export default function DocumentsPage() {
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null);
   const [extractingDocumentId, setExtractingDocumentId] = useState<string | null>(null);
   const [summarizingDocumentId, setSummarizingDocumentId] = useState<string | null>(null);
+  const [proposalDocumentId, setProposalDocumentId] = useState<string | null>(null);
+  const [emailDraftDocumentId, setEmailDraftDocumentId] = useState<string | null>(null);
+  const [copiedEmailDraftId, setCopiedEmailDraftId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -277,6 +318,77 @@ export default function DocumentsPage() {
     }
   }
 
+  async function handleGenerateProposal(document: DocumentSummary) {
+    setProposalDocumentId(document.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await apiClient.request<DocumentProposalResponse>(
+        `/documents/${document.id}/proposal`,
+        {
+          method: "POST",
+        },
+      );
+      setSuccessMessage(`${response.filename} proposal generated.`);
+      setDocuments((currentDocuments) =>
+        currentDocuments.map((currentDocument) =>
+          currentDocument.id === response.id
+            ? {
+                ...currentDocument,
+                metadata: response.metadata,
+              }
+            : currentDocument,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to generate proposal.");
+    } finally {
+      setProposalDocumentId(null);
+    }
+  }
+
+  async function handleGenerateEmailDraft(document: DocumentSummary) {
+    setEmailDraftDocumentId(document.id);
+    setCopiedEmailDraftId(null);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await apiClient.request<DocumentEmailDraftResponse>(
+        `/documents/${document.id}/email-draft`,
+        {
+          method: "POST",
+        },
+      );
+      setSuccessMessage(`${response.filename} email draft generated.`);
+      setDocuments((currentDocuments) =>
+        currentDocuments.map((currentDocument) =>
+          currentDocument.id === response.id
+            ? {
+                ...currentDocument,
+                metadata: response.metadata,
+              }
+            : currentDocument,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to generate email draft.");
+    } finally {
+      setEmailDraftDocumentId(null);
+    }
+  }
+
+  async function handleCopyEmailDraft(documentId: string, emailDraft: EmailDraft) {
+    if (!navigator.clipboard) {
+      setErrorMessage("Clipboard is not available in this browser.");
+      return;
+    }
+
+    await navigator.clipboard.writeText(`${emailDraft.subject}\n\n${emailDraft.body}`);
+    setCopiedEmailDraftId(documentId);
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -354,9 +466,13 @@ export default function DocumentsPage() {
                 const isIngesting = ingestingDocumentId === document.id;
                 const isExtracting = extractingDocumentId === document.id;
                 const isSummarizing = summarizingDocumentId === document.id;
+                const isGeneratingProposal = proposalDocumentId === document.id;
+                const isGeneratingEmailDraft = emailDraftDocumentId === document.id;
                 const hasMetadata = Boolean(document.metadata || document.summary);
                 const metadata = document.metadata;
                 const workflow = metadata?.recommended_workflow ?? metadata?.suggested_workflow;
+                const proposal = metadata?.proposal_draft;
+                const emailDraft = metadata?.email_draft;
 
                 return (
                   <Fragment key={document.id}>
@@ -406,6 +522,26 @@ export default function DocumentsPage() {
                               type="button"
                             >
                               {isSummarizing ? "Generating" : "Generate summary"}
+                            </button>
+                          ) : null}
+                          {canExtractMetadata(document.status) ? (
+                            <button
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isGeneratingProposal || proposalDocumentId !== null}
+                              onClick={() => void handleGenerateProposal(document)}
+                              type="button"
+                            >
+                              {isGeneratingProposal ? "Generating" : "Generate proposal"}
+                            </button>
+                          ) : null}
+                          {canExtractMetadata(document.status) ? (
+                            <button
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isGeneratingEmailDraft || emailDraftDocumentId !== null}
+                              onClick={() => void handleGenerateEmailDraft(document)}
+                              type="button"
+                            >
+                              {isGeneratingEmailDraft ? "Generating" : "Generate email draft"}
                             </button>
                           ) : null}
                           {!canIngest(document.status) && !canExtractMetadata(document.status) ? (
@@ -463,6 +599,14 @@ export default function DocumentsPage() {
                                 ) : null}
                               </div>
                             ) : null}
+                            {proposal ? <ProposalDraftCard proposal={proposal} /> : null}
+                            {emailDraft ? (
+                              <EmailDraftCard
+                                copied={copiedEmailDraftId === document.id}
+                                emailDraft={emailDraft}
+                                onCopy={() => void handleCopyEmailDraft(document.id, emailDraft)}
+                              />
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -475,6 +619,68 @@ export default function DocumentsPage() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function ProposalDraftCard({ proposal }: { proposal: ProposalDraft }) {
+  return (
+    <div className="space-y-3 border-t border-slate-200 pt-3">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-950">{proposal.proposal_title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-700">{proposal.executive_summary}</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <MetadataField label="Client problem" value={proposal.client_problem ?? "Unknown"} />
+        <MetadataField label="Proposed solution" value={proposal.proposed_solution} />
+        <MetadataList label="Scope of work" values={proposal.scope_of_work} />
+        <MetadataList label="Deliverables" values={proposal.deliverables} />
+        <MetadataList label="Timeline" values={proposal.timeline} />
+        <MetadataList label="Assumptions" values={proposal.assumptions} />
+        <MetadataList label="Missing information" values={proposal.missing_information} />
+        <MetadataList label="Next steps" values={proposal.next_steps} />
+      </div>
+    </div>
+  );
+}
+
+function EmailDraftCard({
+  copied,
+  emailDraft,
+  onCopy,
+}: {
+  copied: boolean;
+  emailDraft: EmailDraft;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="space-y-3 border-t border-slate-200 pt-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-950">Email draft</h3>
+          <p className="mt-1 text-sm font-medium text-slate-800">{emailDraft.subject}</p>
+        </div>
+        <button
+          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
+          onClick={onCopy}
+          type="button"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{emailDraft.body}</p>
+      <div className="grid gap-3 md:grid-cols-2">
+        <MetadataField label="Purpose" value={emailDraft.purpose} />
+        <MetadataField
+          label="Recipient context"
+          value={emailDraft.recipient_context ?? "Unknown"}
+        />
+        <MetadataField label="Call to action" value={emailDraft.call_to_action ?? "None"} />
+        <MetadataList
+          label="Missing information questions"
+          values={emailDraft.missing_information_questions}
+        />
+      </div>
+    </div>
   );
 }
 

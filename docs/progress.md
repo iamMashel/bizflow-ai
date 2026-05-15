@@ -224,11 +224,68 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 ### Not Included
 
 - n8n workflow triggers.
-- Proposal generation.
 
 ### Next
 
-- Build proposal generation from extracted metadata and retrieved context.
+- Generate reviewable email drafts before n8n workflow automation.
+
+## Email Draft Generation Milestone
+
+### Completed
+
+- Added authenticated `POST /documents/{document_id}/email-draft`.
+- Email draft generation requires a completed document with chunks.
+- Gemini 2.5 Flash generates structured email draft JSON from document context, summary, metadata, and proposal draft when available.
+- Email drafts include subject, body, purpose, recipient context, missing information questions, and call to action.
+- Email drafts are saved to `documents.metadata.email_draft` without overwriting existing metadata.
+- Documents page can generate, display, and copy email drafts.
+
+### Verified
+
+- Unauthenticated email draft requests return 401.
+- Other users' documents remain hidden through user-scoped lookups.
+- Documents without chunks return a useful ingest-first error.
+- Email draft LLM calls are mocked in tests.
+- Invalid email draft JSON is handled safely.
+
+### Not Included
+
+- n8n workflow triggers.
+- Email sending.
+
+### Next
+
+- Add human approval and n8n workflow trigger support.
+
+## Proposal Generation Milestone
+
+### Completed
+
+- Added authenticated `POST /documents/{document_id}/proposal`.
+- Proposal generation requires a completed document with chunks.
+- Gemini 2.5 Flash generates a structured proposal draft from document context, summary, and metadata.
+- Proposal drafts include executive summary, client problem, solution, scope, deliverables, timeline, assumptions, missing information, and next steps.
+- Proposal drafts are saved to `documents.metadata.proposal_draft`.
+- Documents page can generate and display proposal drafts.
+
+### Verified
+
+- Unauthenticated proposal requests return 401.
+- Other users' documents remain hidden through user-scoped lookups.
+- Documents without chunks return a useful ingest-first error.
+- Proposal LLM calls are mocked in tests.
+- Invalid proposal JSON is handled safely.
+- Backend checks pass with 53 tests.
+- Frontend lint and build pass.
+
+### Not Included
+
+- n8n workflow triggers.
+- Email sending.
+
+### Next
+
+- Add human approval and n8n workflow trigger support.
 
 ## Document Summary Actions Milestone
 

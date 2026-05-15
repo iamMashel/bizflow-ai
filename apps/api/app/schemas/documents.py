@@ -71,3 +71,39 @@ class DocumentSummaryResponse(BaseModel):
     summary: str
     metadata: dict[str, Any]
     generated: DocumentSummaryGeneration
+
+
+class ProposalDraft(BaseModel):
+    proposal_title: str
+    executive_summary: str
+    client_problem: str | None
+    proposed_solution: str
+    scope_of_work: list[str]
+    deliverables: list[str]
+    timeline: list[str]
+    assumptions: list[str]
+    missing_information: list[str]
+    next_steps: list[str]
+
+
+class DocumentProposalResponse(BaseModel):
+    id: UUID
+    filename: str
+    proposal: ProposalDraft
+    metadata: dict[str, Any]
+
+
+class EmailDraft(BaseModel):
+    subject: str
+    body: str
+    purpose: str
+    recipient_context: str | None
+    missing_information_questions: list[str]
+    call_to_action: str | None
+
+
+class DocumentEmailDraftResponse(BaseModel):
+    id: UUID
+    filename: str
+    email_draft: EmailDraft
+    metadata: dict[str, Any]

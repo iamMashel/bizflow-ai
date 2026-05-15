@@ -6,15 +6,25 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from app.core.config import Settings, get_settings
 from app.core.security import CurrentUser, get_current_user
 from app.schemas.documents import (
+    DocumentEmailDraftResponse,
     DocumentIngestResponse,
     DocumentMetadataResponse,
+    DocumentProposalResponse,
     DocumentSummary,
     DocumentSummaryResponse,
     DocumentUploadResponse,
 )
+from app.services.document_email_draft_service import (
+    DocumentEmailDraftService,
+    DocumentEmailDraftServiceError,
+)
 from app.services.document_metadata_service import (
     DocumentMetadataService,
     DocumentMetadataServiceError,
+)
+from app.services.document_proposal_service import (
+    DocumentProposalService,
+    DocumentProposalServiceError,
 )
 from app.services.document_service import DocumentService, DocumentServiceError
 from app.services.document_summary_service import (
@@ -50,6 +60,18 @@ def get_summary_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DocumentSummaryService:
     return DocumentSummaryService(settings)
+
+
+def get_proposal_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DocumentProposalService:
+    return DocumentProposalService(settings)
+
+
+def get_email_draft_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DocumentEmailDraftService:
+    return DocumentEmailDraftService(settings)
 
 
 def _file_extension(filename: str) -> str:
@@ -143,6 +165,38 @@ async def generate_document_summary(
             access_token=current_user.access_token,
         )
     except DocumentSummaryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post("/{document_id}/proposal", response_model=DocumentProposalResponse)
+async def generate_document_proposal(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    service: Annotated[DocumentProposalService, Depends(get_proposal_service)],
+) -> DocumentProposalResponse:
+    try:
+        return await service.generate_proposal(
+            document_id=document_id,
+            user_id=current_user.id,
+            access_token=current_user.access_token,
+        )
+    except DocumentProposalServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post("/{document_id}/email-draft", response_model=DocumentEmailDraftResponse)
+async def generate_document_email_draft(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    service: Annotated[DocumentEmailDraftService, Depends(get_email_draft_service)],
+) -> DocumentEmailDraftResponse:
+    try:
+        return await service.generate_email_draft(
+            document_id=document_id,
+            user_id=current_user.id,
+            access_token=current_user.access_token,
+        )
+    except DocumentEmailDraftServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 

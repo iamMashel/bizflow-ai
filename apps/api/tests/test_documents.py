@@ -5,22 +5,30 @@ from fastapi.testclient import TestClient
 
 from app.api.routes_documents import (
     get_document_service,
+    get_email_draft_service,
     get_ingestion_service,
     get_metadata_service,
+    get_proposal_service,
     get_summary_service,
 )
 from app.core.config import Settings, get_settings
 from app.core.security import CurrentUser, get_current_user
 from app.main import app
 from app.schemas.documents import (
+    DocumentEmailDraftResponse,
     DocumentMetadata,
     DocumentMetadataResponse,
+    DocumentProposalResponse,
     DocumentSummary,
     DocumentSummaryGeneration,
     DocumentSummaryResponse,
     DocumentUploadResponse,
+    EmailDraft,
+    ProposalDraft,
 )
+from app.services.document_email_draft_service import DocumentEmailDraftServiceError
 from app.services.document_metadata_service import DocumentMetadataServiceError
+from app.services.document_proposal_service import DocumentProposalServiceError
 from app.services.document_service import DocumentService
 from app.services.document_summary_service import DocumentSummaryServiceError
 from app.services.ingestion_service import IngestionResult, IngestionServiceError
@@ -166,6 +174,74 @@ class FakeSummaryService:
         )
 
 
+class FakeProposalService:
+    def __init__(self, *, error: DocumentProposalServiceError | None = None) -> None:
+        self.error = error
+
+    async def generate_proposal(
+        self,
+        *,
+        document_id: UUID,
+        user_id: UUID,
+        access_token: str,
+    ) -> DocumentProposalResponse:
+        assert document_id == DOCUMENT_ID
+        assert user_id == USER_ID
+        assert access_token == "test-access-token"
+        if self.error is not None:
+            raise self.error
+        proposal = ProposalDraft(
+            proposal_title="Acme Implementation Proposal",
+            executive_summary="A proposal for Acme.",
+            client_problem="Acme needs implementation support.",
+            proposed_solution="Deliver BizFlow AI implementation support.",
+            scope_of_work=["Discovery", "Implementation"],
+            deliverables=["Configured workspace"],
+            timeline=[],
+            assumptions=["Acme provides stakeholders."],
+            missing_information=["Budget"],
+            next_steps=["Confirm scope"],
+        )
+        return DocumentProposalResponse(
+            id=document_id,
+            filename="proposal.pdf",
+            proposal=proposal,
+            metadata={"proposal_draft": proposal.model_dump(mode="json")},
+        )
+
+
+class FakeEmailDraftService:
+    def __init__(self, *, error: DocumentEmailDraftServiceError | None = None) -> None:
+        self.error = error
+
+    async def generate_email_draft(
+        self,
+        *,
+        document_id: UUID,
+        user_id: UUID,
+        access_token: str,
+    ) -> DocumentEmailDraftResponse:
+        assert document_id == DOCUMENT_ID
+        assert user_id == USER_ID
+        assert access_token == "test-access-token"
+        if self.error is not None:
+            raise self.error
+        email_draft = EmailDraft(
+            subject="Proposal Follow-Up for Acme",
+            body="Hi Acme team,\n\nThank you for sharing your brief.",
+            purpose="proposal_follow_up",
+            recipient_context="Client stakeholder",
+            missing_information_questions=["What timeline should we plan around?"],
+            call_to_action="Please confirm the preferred implementation timeline.",
+        )
+        return DocumentEmailDraftResponse(
+            id=document_id,
+            filename="proposal.pdf",
+            email_draft=email_draft,
+            metadata={"email_draft": email_draft.model_dump(mode="json")},
+        )
+
+
 def override_user() -> CurrentUser:
     return CurrentUser(
         id=USER_ID,
@@ -189,6 +265,8 @@ def setup_overrides(
     ingestion_service: FakeIngestionService | None = None,
     metadata_service: FakeMetadataService | None = None,
     summary_service: FakeSummaryService | None = None,
+    proposal_service: FakeProposalService | None = None,
+    email_draft_service: FakeEmailDraftService | None = None,
     max_upload_bytes: int = 20 * 1024 * 1024,
 ) -> None:
     app.dependency_overrides[get_current_user] = override_user
@@ -201,6 +279,12 @@ def setup_overrides(
         metadata_service or FakeMetadataService()
     )
     app.dependency_overrides[get_summary_service] = lambda: summary_service or FakeSummaryService()
+    app.dependency_overrides[get_proposal_service] = lambda: (
+        proposal_service or FakeProposalService()
+    )
+    app.dependency_overrides[get_email_draft_service] = lambda: (
+        email_draft_service or FakeEmailDraftService()
+    )
 
 
 def test_documents_rejects_missing_token() -> None:
@@ -462,6 +546,130 @@ def test_document_summary_hides_other_users_documents() -> None:
 
     try:
         response = client.post(f"/documents/{DOCUMENT_ID}/summary")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_document_proposal_rejects_missing_token() -> None:
+    client = TestClient(app)
+
+    response = client.post(f"/documents/{DOCUMENT_ID}/proposal")
+
+    assert response.status_code == 401
+
+
+def test_document_proposal_returns_generated_proposal() -> None:
+    setup_overrides()
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/proposal")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(DOCUMENT_ID),
+        "filename": "proposal.pdf",
+        "proposal": {
+            "proposal_title": "Acme Implementation Proposal",
+            "executive_summary": "A proposal for Acme.",
+            "client_problem": "Acme needs implementation support.",
+            "proposed_solution": "Deliver BizFlow AI implementation support.",
+            "scope_of_work": ["Discovery", "Implementation"],
+            "deliverables": ["Configured workspace"],
+            "timeline": [],
+            "assumptions": ["Acme provides stakeholders."],
+            "missing_information": ["Budget"],
+            "next_steps": ["Confirm scope"],
+        },
+        "metadata": {
+            "proposal_draft": {
+                "proposal_title": "Acme Implementation Proposal",
+                "executive_summary": "A proposal for Acme.",
+                "client_problem": "Acme needs implementation support.",
+                "proposed_solution": "Deliver BizFlow AI implementation support.",
+                "scope_of_work": ["Discovery", "Implementation"],
+                "deliverables": ["Configured workspace"],
+                "timeline": [],
+                "assumptions": ["Acme provides stakeholders."],
+                "missing_information": ["Budget"],
+                "next_steps": ["Confirm scope"],
+            }
+        },
+    }
+
+
+def test_document_proposal_hides_other_users_documents() -> None:
+    setup_overrides(
+        proposal_service=FakeProposalService(
+            error=DocumentProposalServiceError("Document not found.", status_code=404)
+        )
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/proposal")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_document_email_draft_rejects_missing_token() -> None:
+    client = TestClient(app)
+
+    response = client.post(f"/documents/{DOCUMENT_ID}/email-draft")
+
+    assert response.status_code == 401
+
+
+def test_document_email_draft_returns_generated_draft() -> None:
+    setup_overrides()
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/email-draft")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(DOCUMENT_ID),
+        "filename": "proposal.pdf",
+        "email_draft": {
+            "subject": "Proposal Follow-Up for Acme",
+            "body": "Hi Acme team,\n\nThank you for sharing your brief.",
+            "purpose": "proposal_follow_up",
+            "recipient_context": "Client stakeholder",
+            "missing_information_questions": ["What timeline should we plan around?"],
+            "call_to_action": "Please confirm the preferred implementation timeline.",
+        },
+        "metadata": {
+            "email_draft": {
+                "subject": "Proposal Follow-Up for Acme",
+                "body": "Hi Acme team,\n\nThank you for sharing your brief.",
+                "purpose": "proposal_follow_up",
+                "recipient_context": "Client stakeholder",
+                "missing_information_questions": ["What timeline should we plan around?"],
+                "call_to_action": "Please confirm the preferred implementation timeline.",
+            }
+        },
+    }
+
+
+def test_document_email_draft_hides_other_users_documents() -> None:
+    setup_overrides(
+        email_draft_service=FakeEmailDraftService(
+            error=DocumentEmailDraftServiceError("Document not found.", status_code=404)
+        )
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/email-draft")
     finally:
         app.dependency_overrides.clear()
 
