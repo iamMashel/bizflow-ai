@@ -202,6 +202,34 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 
 - Add OCR or richer PDF layout parsing when needed.
 
+## Document Metadata Milestone
+
+### Completed
+
+- Added authenticated `POST /documents/{document_id}/metadata`.
+- Metadata extraction reads existing ingested chunks for the current user's document.
+- Gemini 2.5 Flash generates structured metadata through the existing generation service.
+- Metadata JSON is parsed, validated, and saved to `documents.metadata`.
+- Generated summaries are saved to `documents.summary` when available.
+- Documents page can extract and display metadata for completed documents.
+
+### Verified
+
+- Unauthenticated metadata extraction returns 401.
+- Other users' documents remain hidden through user-scoped lookups.
+- Documents without chunks return a useful ingest-first error.
+- Metadata LLM calls are mocked in tests.
+- Invalid JSON is handled safely.
+
+### Not Included
+
+- n8n workflow triggers.
+- Proposal generation.
+
+### Next
+
+- Build proposal generation from extracted metadata and retrieved context.
+
 ## PDF Ingestion Milestone
 
 ### Completed

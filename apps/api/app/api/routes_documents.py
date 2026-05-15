@@ -5,7 +5,16 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.core.config import Settings, get_settings
 from app.core.security import CurrentUser, get_current_user
-from app.schemas.documents import DocumentIngestResponse, DocumentSummary, DocumentUploadResponse
+from app.schemas.documents import (
+    DocumentIngestResponse,
+    DocumentMetadataResponse,
+    DocumentSummary,
+    DocumentUploadResponse,
+)
+from app.services.document_metadata_service import (
+    DocumentMetadataService,
+    DocumentMetadataServiceError,
+)
 from app.services.document_service import DocumentService, DocumentServiceError
 from app.services.ingestion_service import IngestionService, IngestionServiceError
 
@@ -24,6 +33,12 @@ def get_ingestion_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> IngestionService:
     return IngestionService(settings)
+
+
+def get_metadata_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DocumentMetadataService:
+    return DocumentMetadataService(settings)
 
 
 def _file_extension(filename: str) -> str:
@@ -49,7 +64,7 @@ def _validate_filename(filename: str | None) -> str:
     return clean_filename
 
 
-@router.get("", response_model=list[DocumentSummary])
+@router.get("", response_model=list[DocumentSummary], response_model_exclude_none=True)
 async def list_documents(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     service: Annotated[DocumentService, Depends(get_document_service)],
@@ -88,7 +103,28 @@ async def ingest_document(
     )
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/metadata", response_model=DocumentMetadataResponse)
+async def extract_document_metadata(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    service: Annotated[DocumentMetadataService, Depends(get_metadata_service)],
+) -> DocumentMetadataResponse:
+    try:
+        return await service.extract_metadata(
+            document_id=document_id,
+            user_id=current_user.id,
+            access_token=current_user.access_token,
+        )
+    except DocumentMetadataServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post(
+    "/upload",
+    response_model=DocumentUploadResponse,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_document(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     service: Annotated[DocumentService, Depends(get_document_service)],

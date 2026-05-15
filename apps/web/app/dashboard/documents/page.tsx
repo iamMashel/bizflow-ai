@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, Fragment, FormEvent, useEffect, useState } from "react";
 
 import { EmptyState, ErrorState, LoadingState } from "@/src/components/state-patterns";
 import { apiClient } from "@/src/lib/api-client";
@@ -12,6 +12,8 @@ type DocumentSummary = {
   filename: string;
   status: DocumentStatus;
   created_at: string;
+  summary?: string | null;
+  metadata?: DocumentMetadata | null;
 };
 
 type DocumentUploadResponse = DocumentSummary & {
@@ -22,6 +24,25 @@ type DocumentIngestResponse = {
   id: string;
   status: DocumentStatus;
   chunks_created: number;
+};
+
+type DocumentMetadata = {
+  document_type?: string;
+  title?: string | null;
+  summary?: string;
+  entities?: string[];
+  key_points?: string[];
+  missing_information?: string[];
+  recommended_actions?: string[];
+  recommended_workflow?: string | null;
+  confidence?: number;
+};
+
+type DocumentMetadataResponse = {
+  id: string;
+  filename: string;
+  summary: string | null;
+  metadata: DocumentMetadata;
 };
 
 const acceptedFileTypes = ".pdf,.docx,.txt,.md,.csv";
@@ -52,12 +73,25 @@ function canIngest(status: DocumentStatus) {
   return status === "pending" || status === "failed";
 }
 
+function canExtractMetadata(status: DocumentStatus) {
+  return status === "completed" || status === "ready";
+}
+
+function formatConfidence(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function metadataList(values: string[] | undefined) {
+  return Array.isArray(values) ? values : [];
+}
+
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null);
+  const [extractingDocumentId, setExtractingDocumentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -162,6 +196,37 @@ export default function DocumentsPage() {
     }
   }
 
+  async function handleExtractMetadata(document: DocumentSummary) {
+    setExtractingDocumentId(document.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await apiClient.request<DocumentMetadataResponse>(
+        `/documents/${document.id}/metadata`,
+        {
+          method: "POST",
+        },
+      );
+      setSuccessMessage(`${response.filename} metadata extracted.`);
+      setDocuments((currentDocuments) =>
+        currentDocuments.map((currentDocument) =>
+          currentDocument.id === response.id
+            ? {
+                ...currentDocument,
+                summary: response.summary,
+                metadata: response.metadata,
+              }
+            : currentDocument,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to extract metadata.");
+    } finally {
+      setExtractingDocumentId(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -237,39 +302,104 @@ export default function DocumentsPage() {
             <tbody className="divide-y divide-slate-100">
               {documents.map((document) => {
                 const isIngesting = ingestingDocumentId === document.id;
+                const isExtracting = extractingDocumentId === document.id;
+                const hasMetadata = Boolean(document.metadata || document.summary);
+                const metadata = document.metadata;
 
                 return (
-                  <tr key={document.id}>
-                    <td className="max-w-xs truncate px-4 py-3 font-medium text-slate-950">
-                      {document.filename}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusClasses(
-                          document.status,
-                        )}`}
-                      >
-                        {isIngesting ? "processing" : document.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatDate(document.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {canIngest(document.status) ? (
-                        <button
-                          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isIngesting || ingestingDocumentId !== null}
-                          onClick={() => void handleIngest(document)}
-                          type="button"
+                  <Fragment key={document.id}>
+                    <tr>
+                      <td className="max-w-xs truncate px-4 py-3 font-medium text-slate-950">
+                        {document.filename}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusClasses(
+                            document.status,
+                          )}`}
                         >
-                          {isIngesting ? "Ingesting" : "Ingest"}
-                        </button>
-                      ) : (
-                        <span className="text-sm text-slate-400">-</span>
-                      )}
-                    </td>
-                  </tr>
+                          {isIngesting ? "processing" : document.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {formatDate(document.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          {canIngest(document.status) ? (
+                            <button
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isIngesting || ingestingDocumentId !== null}
+                              onClick={() => void handleIngest(document)}
+                              type="button"
+                            >
+                              {isIngesting ? "Ingesting" : "Ingest"}
+                            </button>
+                          ) : null}
+                          {canExtractMetadata(document.status) ? (
+                            <button
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isExtracting || extractingDocumentId !== null}
+                              onClick={() => void handleExtractMetadata(document)}
+                              type="button"
+                            >
+                              {isExtracting ? "Extracting" : "Extract metadata"}
+                            </button>
+                          ) : null}
+                          {!canIngest(document.status) && !canExtractMetadata(document.status) ? (
+                            <span className="text-sm text-slate-400">-</span>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                    {hasMetadata ? (
+                      <tr>
+                        <td className="bg-slate-50 px-4 py-4" colSpan={4}>
+                          <div className="space-y-3 border border-slate-200 bg-white p-4">
+                            {document.summary ? (
+                              <div>
+                                <h3 className="text-sm font-semibold text-slate-950">Summary</h3>
+                                <p className="mt-1 text-sm leading-6 text-slate-700">
+                                  {document.summary}
+                                </p>
+                              </div>
+                            ) : null}
+                            {metadata ? (
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <MetadataField
+                                  label="Type"
+                                  value={metadata.document_type ?? "Unknown"}
+                                />
+                                {typeof metadata.confidence === "number" ? (
+                                  <MetadataField
+                                    label="Confidence"
+                                    value={formatConfidence(metadata.confidence)}
+                                  />
+                                ) : null}
+                                <MetadataList label="Entities" values={metadataList(metadata.entities)} />
+                                <MetadataList
+                                  label="Key points"
+                                  values={metadataList(metadata.key_points)}
+                                />
+                                <MetadataList
+                                  label="Missing information"
+                                  values={metadataList(metadata.missing_information)}
+                                />
+                                <MetadataList
+                                  label="Recommended actions"
+                                  values={metadataList(metadata.recommended_actions)}
+                                />
+                                <MetadataField
+                                  label="Workflow"
+                                  value={metadata.recommended_workflow ?? "None"}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -277,5 +407,25 @@ export default function DocumentsPage() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function MetadataField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase text-slate-500">{label}</h3>
+      <p className="mt-1 text-sm text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function MetadataList({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase text-slate-500">{label}</h3>
+      <ul className="mt-1 space-y-1 text-sm text-slate-700">
+        {values.length > 0 ? values.map((value) => <li key={value}>{value}</li>) : <li>None</li>}
+      </ul>
+    </div>
   );
 }

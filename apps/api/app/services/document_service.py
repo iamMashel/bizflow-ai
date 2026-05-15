@@ -65,7 +65,7 @@ class DocumentService:
             rows = await self._select_documents(
                 user_id=user_id,
                 access_token=access_token,
-                select="id,filename,status,created_at",
+                select="id,filename,status,created_at,summary,metadata",
             )
         except DocumentServiceError as exc:
             if exc.code == "PGRST205":
@@ -155,7 +155,7 @@ class DocumentService:
         rows = await self._select_documents(
             user_id=user_id,
             access_token=access_token,
-            select="id,filename,status,created_at",
+            select="id,filename,status,created_at,summary,metadata",
             extra_params={"file_hash": f"eq.{file_hash}", "limit": "1"},
         )
         return rows[0] if rows else None
@@ -212,7 +212,7 @@ class DocumentService:
                     "Prefer": "return=representation",
                 },
                 json=payload,
-                params={"select": "id,filename,status,created_at"},
+                params={"select": "id,filename,status,created_at,summary,metadata"},
             )
 
         self._raise_for_supabase_error(response, "Unable to create document row.")
@@ -265,6 +265,8 @@ class DocumentService:
         filename = row.get("filename")
         status = row.get("status")
         created_at = row.get("created_at")
+        summary = row.get("summary")
+        metadata = row.get("metadata")
 
         if not isinstance(document_id, str):
             raise DocumentServiceError("Document row is missing id.")
@@ -280,4 +282,6 @@ class DocumentService:
             filename=filename,
             status=cast(DocumentStatus, status),
             created_at=datetime.fromisoformat(created_at.replace("Z", "+00:00")),
+            summary=summary if isinstance(summary, str) else None,
+            metadata=metadata if isinstance(metadata, dict) and metadata else None,
         )

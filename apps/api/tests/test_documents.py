@@ -3,11 +3,22 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from app.api.routes_documents import get_document_service, get_ingestion_service
+from app.api.routes_documents import (
+    get_document_service,
+    get_ingestion_service,
+    get_metadata_service,
+)
 from app.core.config import Settings, get_settings
 from app.core.security import CurrentUser, get_current_user
 from app.main import app
-from app.schemas.documents import DocumentSummary, DocumentUploadResponse
+from app.schemas.documents import (
+    DocumentMetadata,
+    DocumentMetadataResponse,
+    DocumentSummary,
+    DocumentUploadResponse,
+)
+from app.services.document_metadata_service import DocumentMetadataServiceError
+from app.services.document_service import DocumentService
 from app.services.ingestion_service import IngestionResult, IngestionServiceError
 
 USER_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -78,6 +89,41 @@ class FakeIngestionService:
         return IngestionResult(document_id=document_id, status="completed", chunks_created=2)
 
 
+class FakeMetadataService:
+    def __init__(self, *, error: DocumentMetadataServiceError | None = None) -> None:
+        self.error = error
+
+    async def extract_metadata(
+        self,
+        *,
+        document_id: UUID,
+        user_id: UUID,
+        access_token: str,
+    ) -> DocumentMetadataResponse:
+        assert document_id == DOCUMENT_ID
+        assert user_id == USER_ID
+        assert access_token == "test-access-token"
+        if self.error is not None:
+            raise self.error
+        metadata = DocumentMetadata(
+            document_type="proposal",
+            title="Acme Proposal",
+            summary="A short proposal for Acme.",
+            entities=["Acme"],
+            key_points=["Implementation is planned."],
+            missing_information=[],
+            recommended_actions=["Review scope."],
+            recommended_workflow="proposal_review",
+            confidence=0.84,
+        )
+        return DocumentMetadataResponse(
+            id=document_id,
+            filename="proposal.pdf",
+            summary=metadata.summary,
+            metadata=metadata,
+        )
+
+
 def override_user() -> CurrentUser:
     return CurrentUser(
         id=USER_ID,
@@ -99,6 +145,7 @@ def setup_overrides(
     *,
     service: FakeDocumentService | None = None,
     ingestion_service: FakeIngestionService | None = None,
+    metadata_service: FakeMetadataService | None = None,
     max_upload_bytes: int = 20 * 1024 * 1024,
 ) -> None:
     app.dependency_overrides[get_current_user] = override_user
@@ -106,6 +153,9 @@ def setup_overrides(
     app.dependency_overrides[get_document_service] = lambda: service or FakeDocumentService()
     app.dependency_overrides[get_ingestion_service] = lambda: (
         ingestion_service or FakeIngestionService()
+    )
+    app.dependency_overrides[get_metadata_service] = lambda: (
+        metadata_service or FakeMetadataService()
     )
 
 
@@ -195,6 +245,37 @@ def test_documents_returns_current_user_documents() -> None:
     ]
 
 
+def test_document_summary_allows_empty_metadata_and_null_summary() -> None:
+    summary = DocumentService._summary_from_row(
+        {
+            "id": str(DOCUMENT_ID),
+            "filename": "proposal.pdf",
+            "status": "completed",
+            "created_at": CREATED_AT.isoformat().replace("+00:00", "Z"),
+            "summary": None,
+            "metadata": {},
+        }
+    )
+
+    assert summary.summary is None
+    assert summary.metadata is None
+
+
+def test_document_summary_allows_partial_metadata() -> None:
+    summary = DocumentService._summary_from_row(
+        {
+            "id": str(DOCUMENT_ID),
+            "filename": "proposal.pdf",
+            "status": "failed",
+            "created_at": CREATED_AT.isoformat().replace("+00:00", "Z"),
+            "summary": None,
+            "metadata": {"ingestion_error": "Unable to extract text."},
+        }
+    )
+
+    assert summary.metadata == {"ingestion_error": "Unable to extract text."}
+
+
 def test_document_ingest_rejects_missing_token() -> None:
     client = TestClient(app)
 
@@ -230,6 +311,58 @@ def test_document_ingest_hides_other_users_documents() -> None:
 
     try:
         response = client.post(f"/documents/{DOCUMENT_ID}/ingest")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_document_metadata_rejects_missing_token() -> None:
+    client = TestClient(app)
+
+    response = client.post(f"/documents/{DOCUMENT_ID}/metadata")
+
+    assert response.status_code == 401
+
+
+def test_document_metadata_returns_extracted_metadata() -> None:
+    setup_overrides()
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/metadata")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(DOCUMENT_ID),
+        "filename": "proposal.pdf",
+        "summary": "A short proposal for Acme.",
+        "metadata": {
+            "document_type": "proposal",
+            "title": "Acme Proposal",
+            "summary": "A short proposal for Acme.",
+            "entities": ["Acme"],
+            "key_points": ["Implementation is planned."],
+            "missing_information": [],
+            "recommended_actions": ["Review scope."],
+            "recommended_workflow": "proposal_review",
+            "confidence": 0.84,
+        },
+    }
+
+
+def test_document_metadata_hides_other_users_documents() -> None:
+    setup_overrides(
+        metadata_service=FakeMetadataService(
+            error=DocumentMetadataServiceError("Document not found.", status_code=404)
+        )
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/documents/{DOCUMENT_ID}/metadata")
     finally:
         app.dependency_overrides.clear()
 
