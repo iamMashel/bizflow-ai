@@ -288,6 +288,36 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 
 - Connect approved workflow runs to n8n through `n8n_service.py`.
 
+## n8n Workflow Trigger Milestone
+
+### Completed
+
+- Added n8n execution configuration for webhook URL and webhook secret.
+- Implemented `N8nService` as the single backend boundary for n8n webhook calls.
+- Added authenticated `POST /workflows/{workflow_id}/execute`.
+- Workflow execution requires status `approved` and `approved_by_user = true`.
+- Execution updates workflow status `approved -> running -> completed`.
+- n8n failures update workflow status to `failed` and save `error_message`.
+- Workflows page can execute approved workflow runs and display running, completed, and failed states.
+
+### Verified
+
+- Unauthenticated execute requests return 401.
+- Other users' workflow runs remain hidden through user-scoped lookups.
+- Pending workflows cannot execute.
+- Approved workflow execution is tested with mocked n8n calls.
+- Failed mocked n8n calls mark workflows as failed.
+
+### Not Included
+
+- Gmail draft creation.
+- Google Sheets lead logging.
+- Real email sending.
+
+### Next
+
+- Connect the approved n8n webhook to a safe Google Sheets lead log workflow.
+
 ## Proposal Generation Milestone
 
 ### Completed
@@ -304,7 +334,7 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 - Unauthenticated proposal requests return 401.
 - Other users' documents remain hidden through user-scoped lookups.
 - Documents without chunks return a useful ingest-first error.
-- Proposal LLM calls are mocked in tests.
+- Proposal LLM calls are mocked in tests. 
 - Invalid proposal JSON is handled safely.
 - Backend checks pass with 53 tests.
 - Frontend lint and build pass.

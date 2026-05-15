@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/src/components/state-patterns";
 import { apiClient } from "@/src/lib/api-client";
 
-type WorkflowStatus = "pending" | "approved" | "failed" | "sent";
+type WorkflowStatus = "pending" | "approved" | "running" | "completed" | "failed" | "sent";
 
 type WorkflowRun = {
   id: string;
@@ -16,6 +16,7 @@ type WorkflowRun = {
   input_payload: Record<string, unknown>;
   output_payload: Record<string, unknown>;
   approved_by_user: boolean;
+  error_message?: string | null;
   created_at: string;
   updated_at?: string | null;
 };
@@ -30,10 +31,13 @@ function formatDate(value: string) {
 function statusClasses(status: WorkflowStatus) {
   switch (status) {
     case "approved":
+    case "completed":
     case "sent":
       return "bg-emerald-50 text-emerald-700 ring-emerald-200";
     case "failed":
       return "bg-red-50 text-red-700 ring-red-200";
+    case "running":
+      return "bg-blue-50 text-blue-700 ring-blue-200";
     case "pending":
       return "bg-amber-50 text-amber-700 ring-amber-200";
   }
@@ -47,6 +51,7 @@ export default function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<WorkflowRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [approvingWorkflowId, setApprovingWorkflowId] = useState<string | null>(null);
+  const [executingWorkflowId, setExecutingWorkflowId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -116,6 +121,33 @@ export default function WorkflowsPage() {
     }
   }
 
+  async function handleExecute(workflow: WorkflowRun) {
+    setExecutingWorkflowId(workflow.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const completed = await apiClient.request<WorkflowRun>(
+        `/workflows/${workflow.id}/execute`,
+        {
+          method: "POST",
+        },
+      );
+      setSuccessMessage("Workflow executed successfully.");
+      setWorkflows((currentWorkflows) =>
+        currentWorkflows.map((currentWorkflow) =>
+          currentWorkflow.id === completed.id ? completed : currentWorkflow,
+        ),
+      );
+      await loadWorkflows();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to execute workflow.");
+      await loadWorkflows();
+    } finally {
+      setExecutingWorkflowId(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -153,6 +185,7 @@ export default function WorkflowsPage() {
         <div className="space-y-4">
           {workflows.map((workflow) => {
             const isApproving = approvingWorkflowId === workflow.id;
+            const isExecuting = executingWorkflowId === workflow.id;
 
             return (
               <article
@@ -178,26 +211,48 @@ export default function WorkflowsPage() {
                       {formatDate(workflow.created_at)}
                     </p>
                   </div>
-                  {workflow.status === "pending" ? (
-                    <button
-                      className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isApproving || approvingWorkflowId !== null}
-                      onClick={() => void handleApprove(workflow)}
-                      type="button"
-                    >
-                      {isApproving ? "Approving" : "Approve"}
-                    </button>
-                  ) : (
-                    <span className="text-sm font-medium text-emerald-700">
-                      Approved by user
-                    </span>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {workflow.status === "pending" ? (
+                      <button
+                        className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isApproving || approvingWorkflowId !== null}
+                        onClick={() => void handleApprove(workflow)}
+                        type="button"
+                      >
+                        {isApproving ? "Approving" : "Approve"}
+                      </button>
+                    ) : null}
+                    {workflow.status === "approved" ? (
+                      <button
+                        className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isExecuting || executingWorkflowId !== null}
+                        onClick={() => void handleExecute(workflow)}
+                        type="button"
+                      >
+                        {isExecuting ? "Executing" : "Execute"}
+                      </button>
+                    ) : null}
+                    {workflow.status === "running" ? (
+                      <span className="text-sm font-medium text-blue-700">Running</span>
+                    ) : null}
+                    {workflow.status === "completed" || workflow.status === "sent" ? (
+                      <span className="text-sm font-medium text-emerald-700">Completed</span>
+                    ) : null}
+                    {workflow.status === "failed" ? (
+                      <span className="text-sm font-medium text-red-700">Failed</span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                   <PayloadCard title="Input payload" value={workflow.input_payload} />
                   <PayloadCard title="Preview payload" value={workflow.output_payload} />
                 </div>
+                {workflow.error_message ? (
+                  <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {workflow.error_message}
+                  </div>
+                ) : null}
               </article>
             );
           })}

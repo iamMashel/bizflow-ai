@@ -7,6 +7,7 @@ import httpx
 
 from app.core.config import Settings
 from app.schemas.workflows import WorkflowRun, WorkflowType
+from app.services.n8n_service import N8nService, N8nServiceError, WorkflowTriggerRequest
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +19,11 @@ class WorkflowServiceError(Exception):
 
 
 class WorkflowService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, n8n_service: N8nService | None = None) -> None:
         self.settings = settings
         self.supabase_url = settings.supabase_url.rstrip("/")
         self.supabase_anon_key = settings.supabase_anon_key
+        self.n8n_service = n8n_service or N8nService(settings)
 
     async def create_preview(
         self,
@@ -119,6 +121,65 @@ class WorkflowService:
             raise WorkflowServiceError("Unexpected workflows response from Supabase.")
         return [self._workflow_from_row(row) for row in cast(list[dict[str, Any]], payload)]
 
+    async def execute_workflow(
+        self,
+        *,
+        user_id: UUID,
+        access_token: str,
+        workflow_id: UUID,
+    ) -> WorkflowRun:
+        workflow = await self._get_workflow_run(
+            user_id=user_id,
+            access_token=access_token,
+            workflow_id=workflow_id,
+        )
+        if workflow.status != "approved" or not workflow.approved_by_user:
+            raise WorkflowServiceError(
+                "Workflow must be approved before it can be executed.",
+                status_code=400,
+            )
+
+        running = await self._update_workflow_run(
+            user_id=user_id,
+            access_token=access_token,
+            workflow_id=workflow_id,
+            status="running",
+            error_message=None,
+        )
+        try:
+            result = await self.n8n_service.trigger_workflow(
+                WorkflowTriggerRequest(
+                    workflow_id=running.id,
+                    workflow_type=running.workflow_type,
+                    document_id=running.document_id,
+                    input_payload=running.input_payload,
+                    output_payload=running.output_payload,
+                    approved_by_user=running.approved_by_user,
+                )
+            )
+        except N8nServiceError as exc:
+            await self._update_workflow_run(
+                user_id=user_id,
+                access_token=access_token,
+                workflow_id=workflow_id,
+                status="failed",
+                error_message=str(exc),
+            )
+            raise WorkflowServiceError(str(exc), status_code=exc.status_code) from exc
+
+        merged_output_payload = {
+            **running.output_payload,
+            "n8n_response": result.metadata,
+        }
+        return await self._update_workflow_run(
+            user_id=user_id,
+            access_token=access_token,
+            workflow_id=workflow_id,
+            status="completed",
+            output_payload=merged_output_payload,
+            error_message=None,
+        )
+
     async def _get_document(
         self,
         *,
@@ -208,6 +269,46 @@ class WorkflowService:
             raise WorkflowServiceError("Unexpected workflow insert response from Supabase.")
         return self._workflow_from_row(cast(dict[str, Any], payload[0]))
 
+    async def _update_workflow_run(
+        self,
+        *,
+        user_id: UUID,
+        access_token: str,
+        workflow_id: UUID,
+        status: str,
+        output_payload: dict[str, Any] | None = None,
+        error_message: str | None = None,
+    ) -> WorkflowRun:
+        self._require_database_config(access_token)
+        update_payload: dict[str, Any] = {
+            "status": status,
+            "error_message": error_message,
+        }
+        if output_payload is not None:
+            update_payload["output_payload"] = output_payload
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.patch(
+                f"{self.supabase_url}/rest/v1/workflow_runs",
+                headers={
+                    **self._database_headers(access_token),
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation",
+                },
+                params={
+                    "id": f"eq.{workflow_id}",
+                    "user_id": f"eq.{user_id}",
+                    "select": self._workflow_select(),
+                },
+                json=update_payload,
+            )
+
+        self._raise_for_supabase_error(response, "Unable to update workflow.")
+        payload = response.json()
+        if not isinstance(payload, list) or not payload:
+            raise WorkflowServiceError("Workflow not found.", status_code=404)
+        return self._workflow_from_row(cast(dict[str, Any], payload[0]))
+
     @staticmethod
     def _build_input_payload(
         *,
@@ -269,7 +370,7 @@ class WorkflowService:
     def _workflow_select() -> str:
         return (
             "id,document_id,workflow_type,status,input_payload,output_payload,"
-            "approved_by_user,created_at,updated_at,documents(filename)"
+            "approved_by_user,error_message,created_at,updated_at,documents(filename)"
         )
 
     @staticmethod
@@ -289,7 +390,7 @@ class WorkflowService:
             raise WorkflowServiceError("Workflow row is missing id.")
         if workflow_type not in {"proposal_follow_up", "email_draft_review", "lead_capture"}:
             raise WorkflowServiceError("Workflow row has invalid type.")
-        if status not in {"pending", "approved", "failed", "sent"}:
+        if status not in {"pending", "approved", "running", "completed", "failed", "sent"}:
             raise WorkflowServiceError("Workflow row has invalid status.")
         if not isinstance(created_at, str):
             raise WorkflowServiceError("Workflow row is missing created_at.")
@@ -297,6 +398,7 @@ class WorkflowService:
         input_payload = row.get("input_payload")
         output_payload = row.get("output_payload")
         approved_by_user = row.get("approved_by_user")
+        error_message = row.get("error_message")
 
         return WorkflowRun(
             id=UUID(workflow_id),
@@ -307,6 +409,7 @@ class WorkflowService:
             input_payload=input_payload if isinstance(input_payload, dict) else {},
             output_payload=output_payload if isinstance(output_payload, dict) else {},
             approved_by_user=approved_by_user if isinstance(approved_by_user, bool) else False,
+            error_message=error_message if isinstance(error_message, str) else None,
             created_at=datetime.fromisoformat(created_at.replace("Z", "+00:00")),
             updated_at=(
                 datetime.fromisoformat(updated_at.replace("Z", "+00:00"))

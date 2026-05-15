@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 WorkflowType = Literal["proposal_follow_up", "email_draft_review", "lead_capture"]
-WorkflowStatus = Literal["pending", "approved", "failed", "sent"]
+WorkflowStatus = Literal["pending", "approved", "running", "completed", "failed", "sent"]
 
 
 class WorkflowPreviewRequest(BaseModel):
@@ -22,6 +22,7 @@ class WorkflowRun(BaseModel):
     input_payload: dict[str, Any]
     output_payload: dict[str, Any]
     approved_by_user: bool
+    error_message: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

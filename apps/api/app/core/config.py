@@ -78,6 +78,21 @@ class Settings(BaseSettings):
             "BIZFLOW_DEFAULT_CHAT_MODEL",
         ),
     )
+    n8n_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("N8N_BASE_URL", "BIZFLOW_N8N_BASE_URL"),
+    )
+    n8n_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("N8N_WEBHOOK_SECRET", "BIZFLOW_N8N_WEBHOOK_SECRET"),
+    )
+    n8n_workflow_webhook_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "N8N_WORKFLOW_WEBHOOK_URL",
+            "BIZFLOW_N8N_WORKFLOW_WEBHOOK_URL",
+        ),
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

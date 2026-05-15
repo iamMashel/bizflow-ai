@@ -37,6 +37,7 @@ def workflow_run(*, status: str = "pending", approved: bool = False) -> Workflow
             },
         },
         approved_by_user=approved,
+        error_message=None,
         created_at=CREATED_AT,
         updated_at=CREATED_AT,
     )
@@ -88,6 +89,20 @@ class FakeWorkflowService:
             raise self.error
         return [workflow_run()]
 
+    async def execute_workflow(
+        self,
+        *,
+        user_id: UUID,
+        access_token: str,
+        workflow_id: UUID,
+    ) -> WorkflowRun:
+        assert user_id == USER_ID
+        assert access_token == "test-access-token"
+        assert workflow_id == WORKFLOW_ID
+        if self.error is not None:
+            raise self.error
+        return workflow_run(status="completed", approved=True)
+
 
 def override_user() -> CurrentUser:
     return CurrentUser(
@@ -133,6 +148,14 @@ def test_workflow_list_rejects_missing_token() -> None:
     client = TestClient(app)
 
     response = client.get("/workflows")
+
+    assert response.status_code == 401
+
+
+def test_workflow_execute_rejects_missing_token() -> None:
+    client = TestClient(app)
+
+    response = client.post(f"/workflows/{WORKFLOW_ID}/execute")
 
     assert response.status_code == 401
 
@@ -186,6 +209,56 @@ def test_workflow_approve_hides_other_users_workflow() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+def test_workflow_execute_hides_other_users_workflow() -> None:
+    setup_overrides(
+        service=FakeWorkflowService(
+            error=WorkflowServiceError("Workflow not found.", status_code=404)
+        )
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/workflows/{WORKFLOW_ID}/execute")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_pending_workflow_cannot_execute() -> None:
+    setup_overrides(
+        service=FakeWorkflowService(
+            error=WorkflowServiceError(
+                "Workflow must be approved before it can be executed.",
+                status_code=400,
+            )
+        )
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/workflows/{WORKFLOW_ID}/execute")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+
+
+def test_approved_workflow_executes_successfully() -> None:
+    setup_overrides()
+    client = TestClient(app)
+
+    try:
+        response = client.post(f"/workflows/{WORKFLOW_ID}/execute")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "completed"
+    assert payload["approved_by_user"] is True
 
 
 def test_workflow_list_returns_current_user_workflows() -> None:
