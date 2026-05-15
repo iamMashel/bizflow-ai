@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from app.services.rag_answer_service import RagAnswerService, RagAnswerServiceEr
 from app.services.rag_search_service import RagSearchService, RagSearchServiceError
 
 router = APIRouter(prefix="/rag", tags=["rag"])
+logger = logging.getLogger(__name__)
 
 
 def get_rag_search_service(
@@ -53,6 +55,7 @@ async def answer_rag(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     service: Annotated[RagAnswerService, Depends(get_rag_answer_service)],
 ) -> RagAnswerResponse:
+    logger.info("Received RAG answer request: query_length=%s", len(request.query))
     try:
         return await service.answer(
             query=request.query,
@@ -60,4 +63,10 @@ async def answer_rag(
             current_user=current_user,
         )
     except RagAnswerServiceError as exc:
+        logger.warning(
+            "RAG answer request failed: query_length=%s exception_type=%s message=%s",
+            len(request.query),
+            type(exc).__name__,
+            str(exc),
+        )
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

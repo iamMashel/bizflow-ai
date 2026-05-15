@@ -64,18 +64,18 @@ class Settings(BaseSettings):
         default=3072,
         validation_alias=AliasChoices("EMBEDDING_DIMENSIONS", "BIZFLOW_EMBEDDING_DIMENSIONS"),
     )
-    default_generation_provider: str = Field(
+    default_chat_provider: str = Field(
         default="gemini",
         validation_alias=AliasChoices(
-            "DEFAULT_GENERATION_PROVIDER",
-            "BIZFLOW_DEFAULT_GENERATION_PROVIDER",
+            "DEFAULT_CHAT_PROVIDER",
+            "BIZFLOW_DEFAULT_CHAT_PROVIDER",
         ),
     )
-    default_generation_model: str = Field(
+    default_chat_model: str = Field(
         default="gemini-2.5-flash",
         validation_alias=AliasChoices(
-            "DEFAULT_GENERATION_MODEL",
-            "BIZFLOW_DEFAULT_GENERATION_MODEL",
+            "DEFAULT_CHAT_MODEL",
+            "BIZFLOW_DEFAULT_CHAT_MODEL",
         ),
     )
 

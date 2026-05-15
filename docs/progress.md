@@ -176,3 +176,28 @@ question -> embed query -> retrieve chunks -> generate answer with citations.
 
 Build basic chat history:
 question -> retrieve chunks -> generate answer -> persist message and citations.
+
+## RAG Answer Generation Milestone
+
+### Completed
+
+- Added grounded RAG answer generation.
+- `/rag/answer` now retrieves relevant chunks and generates an answer.
+- Gemini embeddings are used for retrieval.
+- Gemini 2.5 Flash is used for answer generation.
+- Answers include citations/sources from retrieved chunks.
+
+### Verified
+
+- User can ask a question from the Chat page.
+- Backend retrieves ingested chunks.
+- Backend generates a grounded answer.
+- Frontend displays the answer.
+
+### Key fix
+
+- Switched chat model from `gemini-2.0-flash` to `gemini-2.5-flash` because the former caused answer generation failures in the current API setup.
+
+### Next
+
+- Add DOCX ingestion support.
