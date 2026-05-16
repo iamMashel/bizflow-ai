@@ -361,6 +361,19 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 - Success traces record safe metadata.
 - Failure traces record error type/message without swallowing the original error.
 
+## Portfolio Documentation Polish
+
+### Completed
+
+- Rewrote `README.md` as a portfolio-grade technical README.
+- Documented the product problem, solution, architecture, tech stack, AI/RAG pipeline, workflow automation pipeline, security model, observability, setup, testing, demo flow, screenshots placeholders, roadmap, and lessons learned.
+- Updated the README to reflect the current implemented product state instead of the initial documentation-only phase.
+
+### Notes
+
+- The README calls out human approval before external workflow execution.
+- The README documents RLS/grants, user isolation, private Supabase Storage handling, Gemini embeddings, Gemini 2.5 Flash, n8n Google Sheets logging, and Langfuse traces.
+
 ## Proposal Generation Milestone
 
 ### Completed
