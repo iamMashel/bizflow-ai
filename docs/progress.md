@@ -374,6 +374,17 @@ question -> retrieve chunks -> generate answer -> persist message and citations.
 - The README calls out human approval before external workflow execution.
 - The README documents RLS/grants, user isolation, private Supabase Storage handling, Gemini embeddings, Gemini 2.5 Flash, n8n Google Sheets logging, and Langfuse traces.
 
+## Portfolio Demo Materials
+
+### Completed
+
+- Added a polished recruiter/interviewer demo script.
+- Added a demo-ready `client_brief_abc_logistics.txt` sample document.
+- Added a final demo checklist.
+- Added GitHub repository profile suggestions.
+- Added a tracked `docs/screenshots` folder for future screenshots.
+- Updated README screenshot placeholders to match the planned screenshot filenames.
+
 ## Proposal Generation Milestone
 
 ### Completed

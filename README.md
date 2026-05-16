@@ -274,7 +274,7 @@ npm run build
 ## Demo Flow
 
 1. Sign up or log in.
-2. Upload a PDF, DOCX, TXT, or MD document.
+2. Upload `docs/demo-assets/client_brief_abc_logistics.txt` or another PDF, DOCX, TXT, or MD document.
 3. Ingest the document.
 4. Ask a question on the Chat page and review cited chunks or a grounded answer.
 5. Extract metadata from the completed document.
@@ -289,14 +289,19 @@ npm run build
 
 ## Screenshots
 
-Screenshots can be added here as the UI is finalized:
+Screenshots can be added here as the final demo environment is captured:
 
-- `docs/screenshots/login.png` - Auth screen
-- `docs/screenshots/documents.png` - Upload, ingestion, metadata, proposal, and email draft view
-- `docs/screenshots/chat.png` - RAG answer with citations
-- `docs/screenshots/workflows.png` - Preview, approval, and execution states
-- `docs/screenshots/langfuse.png` - Trace timeline
-- `docs/screenshots/google-sheets.png` - n8n workflow log output
+| Screen | Placeholder |
+| --- | --- |
+| Login | `docs/screenshots/login.png` |
+| Document upload | `docs/screenshots/documents-upload.png` |
+| Ingestion completed | `docs/screenshots/ingestion-completed.png` |
+| RAG answer with citations | `docs/screenshots/chat-answer.png` |
+| Metadata and summary | `docs/screenshots/metadata-summary.png` |
+| Proposal and email draft | `docs/screenshots/proposal-email.png` |
+| Workflow approval | `docs/screenshots/workflow-approval.png` |
+| Google Sheets workflow log | `docs/screenshots/google-sheets-log.png` |
+| Langfuse trace | `docs/screenshots/langfuse-trace.png` |
 
 ## Roadmap
 
