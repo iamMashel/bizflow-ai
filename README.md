@@ -1,5 +1,7 @@
 # BizFlow AI
 
+<img width="1599" height="781" alt="image" src="https://github.com/user-attachments/assets/a26b50e9-684a-4bfe-82af-91f1ab877fe4" />
+
 BizFlow AI is a production-style full-stack document intelligence and workflow automation platform for small and midsize businesses. It lets authenticated users upload private business documents, ingest them into a RAG index, ask grounded questions with citations, generate structured business outputs, and execute human-approved automations through n8n.
 
 The project is built as a portfolio-grade GenAI system rather than a single demo prompt: it includes real auth, persisted document storage, user isolation, vector retrieval, model-backed extraction/generation, approval-gated workflow execution, Google Sheets logging through n8n, and Langfuse observability.
